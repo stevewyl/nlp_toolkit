@@ -1,0 +1,16 @@
+bi_lstm_att:
+  f_drop_rate: 0.5
+  e_drop_rate: 0.25
+  return_att: True
+
+multi_head_self_att:
+  n_transformer: 1
+  pos_embed: True
+
+train:
+  batch_size: 64
+  epochs: 25
+  train_mode: single
+  n_fold: 10
+  test_szie: 0.2
+  bucket_cnt: 100
