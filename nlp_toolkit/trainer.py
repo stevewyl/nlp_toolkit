@@ -36,6 +36,7 @@ class Trainer(object):
         13. test_size
         14. shuffle: whether to shuffle data between epochs
         15. seq_type: basic iterator or bucketiterator
+        16. nb_bucket: the bucket size
     # Returns:
         The trained model or average performance of the model
     """
@@ -51,6 +52,7 @@ class Trainer(object):
                  early_stopping=True,
                  lrplateau=True,
                  tensorboard=False,
+                 nb_bucket=100,
                  train_mode='single',
                  fold_cnt=10,
                  test_size=0.2,
@@ -66,6 +68,7 @@ class Trainer(object):
         self.train_mode = train_mode
         self.fold_cnt = fold_cnt
         self.shuffle = shuffle
+        self.nb_bucket = nb_bucket
         base_dir = Path(checkpoint_path)
         if not base_dir.exists():
             base_dir.mkdir()
@@ -79,10 +82,10 @@ class Trainer(object):
         if seq_type == 'bucket':
             logger.info('use bucket sequence to speed up model training')
             train_batches = BucketIterator(
-                self.task_type, 100, self.batch_size,
+                self.task_type, self.nb_bucket, self.batch_size,
                 x_len_train, x_train, y_train, self.concat)
             valid_batches = BucketIterator(
-                self.task_type, 100, self.batch_size,
+                self.task_type, self.nb_bucket, self.batch_size,
                 x_len_valid, x_valid, y_valid, self.concat)
         elif seq_type == 'basic':
             train_batches = BasicIterator(

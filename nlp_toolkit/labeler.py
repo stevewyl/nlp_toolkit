@@ -2,9 +2,13 @@
 Sequence Labeler Wrapper
 """
 
+import sys
+import time
+import numpy as np
 from nlp_toolkit.model_zoo import Word_RNN, IDCNN
 from nlp_toolkit.trainer import Trainer
 from nlp_toolkit.utilities import logger
+from nlp_toolkit.sequence import BasicIterator
 
 
 class Labeler(object):
@@ -19,7 +23,10 @@ class Labeler(object):
     def __init__(self, model_name, transformer, seq_type='bucket', config=None):
         self.model_name = model_name
         self.transformer = transformer
-        self.mode = config['mode']
+        if config:
+            self.mode = config['mode']
+        else:
+            self.mode = 'predict'
         if self.mode == 'train':
             assert config is not None
             self.config = config
@@ -84,7 +91,8 @@ class Labeler(object):
             train_mode=t_cfg['train_mode'],
             fold_cnt=t_cfg['nb_fold'],
             test_size=t_cfg['test_size'],
-            metric=t_cfg['metric']
+            metric=t_cfg['metric'],
+            nb_bucket=t_cfg['nb_bucket']
         )
         return model_trainer
 
@@ -92,14 +100,32 @@ class Labeler(object):
         return self.model_trainer.train(
             x, y, self.transformer, self.seq_type)
 
-    def predict(self, x):
-        pass
+    def predict(self, x, batch_size=64):
+        if 'inner_char' in x.keys():
+            concat = True
+            x_char = x['inner_char']
+            x_word = x['word']
+            x_word = np.expand_dims(x_word, axis=-1)
+            x = np.concatenate((x_word, x_char), axis=-1)
+        else:
+            concat = False
+            x = x['word']
+
+        start = time.time()
+        x_seq = BasicIterator(x, batch_size=batch_size, concat=concat)
+        result = self.model.model.predict_generator(x_seq)
+        y_pred = self.transformer.inverse_transform(result)
+        used_time = time.time() - start
+        logger.info('predict {} samples used {:4.1f}s'.format(
+            len(x), used_time))
+        return y_pred
 
     def evaluate(self, x, y):
         pass
 
     def load(self, weight_fname, para_fname):
-        if self.model_name == 'word_rmm':
+        if self.model_name == 'word_rnn':
             self.model = Word_RNN.load(weight_fname, para_fname)
         else:
-            pass
+            logger.warning('invalid model name')
+            sys.exit()

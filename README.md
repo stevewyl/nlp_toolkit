@@ -33,7 +33,7 @@ pip install git+https://www.github.com/keras-team/keras-contrib.git
 1. Dataset：处理文本和标签数据为适合模型输入的格式，主要进行的处理操作有清理、分词、index化
 
 2. Model Zoo & Layer：近几年在该任务中常用的模型汇总及一些Keras的自定义层
-   
+
    自定义层有如下：
 
    * 通用注意力层
@@ -72,7 +72,12 @@ x, y, new_config = dataset.transform()
 seq_labeler = Labeler(config=new_config, model_name='word_rnn', seq_type='bucket',transformer=dataset.transformer)
 trained_model = seq_labeler.train(x, y)
 
-# 预测
+# 预测（以文本分类为例）
+dataset = Dataset('your_data.txt', task_type='classification', mode='predict', tran_fname='your_transformer.h5', segment=False)
+x_seq = dataset.transform()
+text_classifier = Classifier('bi_lstm_att', dataset.transformer)
+text_classifier.load(weight_fname='your_model_weights.h5', para_fname='your_model_parameters.json')
+y_pred = text_classifier.predict(x_seq['word'])
 ```
 
 更多使用细节，请阅读**examples**文件夹中的Jupyter Notebook
@@ -118,19 +123,19 @@ embed: 词向量，pre表示是否使用预训练词向量
 
     [DeepMoji](https://arxiv.org/abs/1708.00524)一文中所采用的的模型框架，本仓库中对attention层作了扩展
 
-    对应配置文件名称：bi_lstm_att
+    对应配置文件中的名称：bi_lstm_att
 
 2. [Transformer](http://papers.nips.cc/paper/7181-attention-is-all-you-need) 🆗
 
     采用Transformer中的多头自注意力层来表征文本信息，详细的细节可阅读此[文章](https://kexue.fm/archives/4765)
 
-    对应配置文件名称：multi_head_self_att
+    对应配置文件中的名称：multi_head_self_att
 
 3. [TextCNN](https://arxiv.org/abs/1408.5882) 🆗
 
     CNN网络之于文本分类任务的开山之作，在过去几年中经常被用作baseline，详细的细节可阅读此[文章](http://www.wildml.com/2015/12/implementing-a-cnn-for-text-classification-in-tensorflow/)
 
-    对应配置文件名称：text_cnn
+    对应配置文件中的名称：text_cnn
 
 4. [DPCNN](http://www.aclweb.org/anthology/P17-1052)
 
@@ -146,23 +151,23 @@ embed: 词向量，pre表示是否使用预训练词向量
 
     Baseline模型，文本序列经过双向LSTM后，由CRF层编码作为输出
 
-    对应配置文件名称：word_rnn
+    对应配置文件中的名称：word_rnn
 
 2. [CharRNN](https://pdfs.semanticscholar.org/b944/5206f592423f0b2faf05f99de124ccc6aaa8.pdf)
 
-    基于汉语的特点，在字符级别的LSTM信息外，拼接偏旁部首，分词，Ngram信息
+    基于汉语的特点，在字符级别的LSTM信息外，加入偏旁部首，分词，Ngram信息
 
 3. [InnerChar](https://arxiv.org/abs/1611.04361) 🆗
 
     基于另外一篇[论文](https://arxiv.org/abs/1511.08308)，扩展了本文的模型，使用bi-lstm或CNN在词内部的char级别进行信息的抽取，然后与原来的词向量进行concat或attention计算
 
-    对应配置文件名称：word_rnn，并设置配置文件data模块中的inner_char为True
+    对应配置文件中的名称：word_rnn，并设置配置文件data模块中的inner_char为True
 
 4. [IDCNN](https://arxiv.org/abs/1702.02098) 🆗
 
     膨胀卷积网络，在保持参数量不变的情况下，增大了卷积核的感受野，详细的细节可阅读此[文章](http://www.crownpku.com//2017/08/26/%E7%94%A8IDCNN%E5%92%8CCRF%E5%81%9A%E7%AB%AF%E5%88%B0%E7%AB%AF%E7%9A%84%E4%B8%AD%E6%96%87%E5%AE%9E%E4%BD%93%E8%AF%86%E5%88%AB.html)
 
-    对应配置文件名称：idcnn
+    对应配置文件中的名称：idcnn
 
 ## 性能
 
@@ -243,16 +248,16 @@ pip install git+https://www.github.com/keras-team/keras-contrib.git
 
 ## Usage
 
-The frameword of this repository：
+The frameword of this repository:
 
 ![framework](./images/framework.jpg)
 
-Following modules are included in：
+Following modules are included in:
 
 1. Dataset：Text and label data are processed in a format suitable for model input. The main processing operations are cleaning, word segmentation and indexation.
 
 2. Model Zoo & Layer：The collection of models commonly used in this task in recent years and some custom layers of Keras.
-   
+
     Customized layers are as followed:
 
     * Attention
@@ -291,16 +296,102 @@ x, y, config = dataset.transform()
 seq_labeler = Labeler(config=config, model_name='word_rnn', seq_type='bucket',,transformer=dataset.transformer)
 trained_model = seq_labeler.train(x, y)
 
-# predict
-trained_model
+# predict (for text classification task)
+dataset = Dataset('your_data.txt', task_type='classification', mode='predict', tran_fname='your_transformer.h5', segment=False)
+x_seq = dataset.transform()
+text_classifier = Classifier('bi_lstm_att', dataset.transformer)
+text_classifier.load(weight_fname='your_model_weights.h5', para_fname='your_model_parameters.json')
+y_pred = text_classifier.predict(x_seq['word'])
 ```
 
 For more details, please read the jupyter notebooks in **examples** folder
 
 ### Data Format
 
+1. Text Classification: Each line is text + label, use \t as sperator (temporarily does not support multi-label tasks)
+
+    such as "公司目前地理位置不太理想， 离城市中心较远点。\tneg"
+
+2. Sequence Labeling: Each line is text + label, use \t as sperator; text sequence and label sequence one-to-one correspondence, separated by spaces
+
+    such as "目前 公司 地理 位置 不 太 理想\tO O B-Chunk I-Chunk O O O"
+
+    label format (chunking as an example):
+
+    * O：common words
+    * B-Chunk：indicates the beginning of the chunk word
+    * I-Chunk：indicates the middle of the chunk word
+    * E-Chunk：indicates the end of the chunk word
+
+    Suggestions: The text sequence is mainly short sentences. For the task of labeling entities, it is best to ensure that there are entity words in each row of data (ie, sequences of non-all Os).
+
+3. Prediction: Each line of different tasks is text.
+
+
+### Configuration file
+
+Train: indicates the parameters in the training process, including batch size, epoch numbers, training mode, etc.
+
+Data: indicates the parameters of data preprocessing, including the maximum number of words and characters, whether to use the word internal character sequence, whether to use word segmentation
+
+Embed: word vectors, pre indicates whether to use pre-trained word vectors
+
+The remaining modules correspond to different model hyperparameters
+
+See the configuration file comments for details.
 
 ## Models
+
+1. Double Bi-LSTM + Attention 🆗
+
+    The model framework used in paper [DeepMoji](https://arxiv.org/abs/1708.00524). The attention layer has been extended in nlp_toolkit.
+
+    Corresponding to the name in the configuration file: bi_lstm_att
+
+2. [Transformer](http://papers.nips.cc/paper/7181-attention-is-all-you-need) 🆗
+
+    Use the multi-head-self-attention layer in Transformer to characterize text information. Read the [article](https://kexue.fm/archives/4765) for details.
+
+    Corresponding to the name in the configuration file: multi_head_self_att
+
+3. [TextCNN](https://arxiv.org/abs/1408.5882) 🆗
+
+    CNN Network's pioneering work on text classification tasks has often been used as a baseline in the past few years. Detailed details can be read in this [Article](http://www.wildml.com/2015/12/implementing-a-cnn-for-text-classification-in-tensorflow/)
+
+    Corresponding to the name in the configuration file: text_cnn
+
+4. [DPCNN](http://www.aclweb.org/anthology/P17-1052)
+
+    Get better text characterization by continuously deepening the CNN network.
+
+5. [HAN](https://www.cs.cmu.edu/~hovy/papers/16HLT-hierarchical-attention-networks.pdf)
+
+    Document classification model using the attention mechanism
+
+### Sequence Labeling
+
+1. [WordRNN](https://arxiv.org/abs/1707.06799) 🆗
+
+    Baseline model, the text sequence is encoded by the CRF layer after passing through the bidirectional LSTM
+
+    Corresponding to the name in the configuration file: word_rnn
+
+2. [CharRNN](https://pdfs.semanticscholar.org/b944/5206f592423f0b2faf05f99de124ccc6aaa8.pdf)
+
+    Based on the characteristics of Chinese, in addition to the LSTM information at the character level, the radicals, word segmentation, and Ngram information are added.
+
+3. [InnerChar](https://arxiv.org/abs/1611.04361) 🆗
+
+    Based on another [paper](https://arxiv.org/abs/1511.08308), the above model is extended, using bi-lstm or CNN to extract information from the char level inside the word, and then concat with the original word vectors or conduct attention calculation.
+
+    Corresponding to the name in the configuration file: word_rnn, and set the inner_char in the data module in the configuration file to True.
+
+4. [IDCNN](https://arxiv.org/abs/1702.02098) 🆗
+
+    The iterated dilated CNN increases the receptive field of the convolution kernel while keeping the parameter amount constant. The detailed details can be read in this [article](http://www.crownpku.com//2017/08/26/%E7%94%A8IDCNN%E5%92%8CCRF%E5%81%9A%E7%AB%AF%E5%88%B0%E7%AB%AF%E7%9A%84%E4%B8%AD%E6%96%87%E5%AE%9E%E4%BD%93%E8%AF%86%E5%88%AB.html)
+
+    Corresponding to the name in the configuration file: idcnn
+
 
 ### Text Classification
 

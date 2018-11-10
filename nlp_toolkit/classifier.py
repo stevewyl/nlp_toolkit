@@ -2,6 +2,7 @@
 Classifier Wrapper
 """
 
+import sys
 import time
 from nlp_toolkit.model_zoo import bi_lstm_attention
 from nlp_toolkit.model_zoo import multi_head_self_attention
@@ -27,7 +28,10 @@ class Classifier(object):
     def __init__(self, model_name, transformer, seq_type='bucket', config=None):
         self.model_name = model_name
         self.transformer = transformer
-        self.mode = config['mode']
+        if config:
+            self.mode = config['mode']
+        else:
+            self.mode = 'predict'
         if self.mode == 'train':
             assert config is not None
             self.config = config
@@ -95,7 +99,8 @@ class Classifier(object):
             train_mode=t_cfg['train_mode'],
             fold_cnt=t_cfg['nb_fold'],
             test_size=t_cfg['test_size'],
-            metric=t_cfg['metric']
+            metric=t_cfg['metric'],
+            nb_bucket=t_cfg['nb_bucket']
         )
         return model_trainer
 
@@ -107,13 +112,16 @@ class Classifier(object):
         return self.model_trainer.train(
             x, y, self.transformer, self.seq_type, return_att)
 
-    def predict(self, x, n_labels, batch_size=64, return_attention=False):
+    def predict(self, x, batch_size=64, return_attention=False):
+        x = x['word']
+        n_labels = len(self.transformer._label_vocab._id2token)
         start = time.time()
         x_seq = BasicIterator(x, batch_size=batch_size)
         result = self.model.model.predict_generator(x_seq)
         y_pred = self.transformer.inverse_transform(result[:, :n_labels])
         used_time = time.time() - start
-        logger.info('predict {} samples used {:4.1f}s'.format(len(x), used_time))
+        logger.info('predict {} samples used {:4.1f}s'.format(
+            len(x), used_time))
         if result.shape[1] > n_labels:
             attention = result[:, n_labels:]
             return y_pred, attention
@@ -128,3 +136,8 @@ class Classifier(object):
             self.model = bi_lstm_attention.load(weight_fname, para_fname)
         elif self.model_name == 'multi_head_self_att':
             self.model = multi_head_self_attention.load(weight_fname, para_fname)
+        elif self.model_name == 'text_cnn':
+            self.model = textCNN.load(weight_fname, para_fname)
+        else:
+            logger.warning('invalid model name')
+            sys.exit()

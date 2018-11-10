@@ -72,7 +72,7 @@ idcnn:
 
 train:
   # bucket个数
-  bucket_cnt: 100
+  nb_bucket: 100
   # batch大小
   batch_size: 64
   # 最大迭代词数

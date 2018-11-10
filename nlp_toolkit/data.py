@@ -109,8 +109,8 @@ class Dataset(object):
         elif self.task_type == 'sequence_labeling':
             cleaned_texts = (line for line in self.texts)
 
-        self.config['mode'] = self.mode
         if self.mode == 'train':
+            self.config['mode'] = self.mode
             x, y = zip(*[(x1.split(' '), y1.split(' ')) for x1, y1 in zip(cleaned_texts, self.labels) if x1])
             x, y = self.transformer.fit_transform(x, y)
             logger.info('texts and labels transformed to number index')
@@ -138,10 +138,9 @@ class Dataset(object):
             return x, y, self.config
 
         elif self.mode == 'predict':
-            n_labels = len(self.transformer._label_vocab._id2token)
             x = [x1.split(' ') for x1 in cleaned_texts if x1]
             x_seq = self.transformer.transform(x)
-            return x_seq, n_labels
+            return x_seq
 
 
 # more detail
