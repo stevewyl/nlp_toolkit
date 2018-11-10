@@ -445,6 +445,6 @@ IDCNN                   |              |              |
 ## Contact
 Contact: Yilei Wang
 
-E-mail: stevewyl@163.com
+📧 E-mail: stevewyl@163.com
 
 WeChat: Steve_1125
