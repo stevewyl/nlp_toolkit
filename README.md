@@ -67,7 +67,7 @@ text_classifier = Classifier(config=new_config, model_name='multi_head_self_att'
 trained_model = text_classifier.train(x, y)
 
 # 序列标注任务
-dataset = Dataset(fname='your_data.txt', task_type='seq_label', mode='train', config=config)
+dataset = Dataset(fname='your_data.txt', task_type='sequence_labeling', mode='train', config=config)
 x, y, new_config = dataset.transform()
 seq_labeler = Labeler(config=new_config, model_name='word_rnn', seq_type='bucket',transformer=dataset.transformer)
 trained_model = seq_labeler.train(x, y)
@@ -291,7 +291,7 @@ text_classifier = Classifier(config=config, model_name='multi_head_self_att', se
 trained_model = text_classifier.train(x, y)
 
 # sequence labeling task
-dataset = Dataset(fname='your_data.txt', task_type='seq_label', mode='train', config=config)
+dataset = Dataset(fname='your_data.txt', task_type='sequence_labeling', mode='train', config=config)
 x, y, config = dataset.transform()
 seq_labeler = Labeler(config=config, model_name='word_rnn', seq_type='bucket',,transformer=dataset.transformer)
 trained_model = seq_labeler.train(x, y)
