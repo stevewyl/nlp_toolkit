@@ -1,16 +1,110 @@
 bi_lstm_att:
-  f_drop_rate: 0.5
-  e_drop_rate: 0.25
+  # rnn隐层大小
+  rnn_size: 512
+  # attention层隐层大小
+  attention_dim: 128
+  # 向量层丢弃率
+  embed_drop_rate: 0.25
+  # 输出层前一层丢弃率
+  final_drop_rate: 0.5
+  # 是否返回attention权重
   return_att: True
 
 multi_head_self_att:
-  n_transformer: 1
+  # head个数
+  nb_head: 8
+  # head大小
+  head_size: 16
+  # attention层个数
+  nb_transfomer: 2
+  # 是否使用位置嵌入向量
   pos_embed: True
+  # 输出层前一层丢弃率
+  final_drop_rate: 0.5
+
+text_cnn:
+  # 卷积核大小
+  conv_kernel_size: [3, 4, 5]
+  # 池化层核大小
+  pool_size: [2, 2, 2]
+  # 滤波器个数
+  nb_filters: 128
+  # 全连接层隐层大小
+  fc_size: 128
+
+word_rnn:
+  # 词级别rnn隐层大小
+  word_rnn_size: 128
+  # 字符级别rnn隐层大小
+  char_rnn_size: 32
+  # 是否使用CRF
+  use_crf: True
+  # 词内部字符信息表征方式，有cnn和rnn两种
+  char_feature_method: cnn
+  # 词和词内部字符信息的连接方式，有concat和attention两种
+  integration_method: attention
+  # rnn层的类别，有lstm和gru两种
+  rnn_type: lstm
+  # rnn层的个数
+  nb_rnn_layers: 2
+  # 滤波器个数
+  nb_filters: 64
+  # 卷积核大小
+  conv_kernel_size: 2
+  # 丢弃率
+  drop_rate: 0.5
+  # rnn层的内部丢弃率
+  re_drop_rate: 0.15
+
+idcnn:
+  # 丢弃率
+  drop_rate: 0.5
+  # 滤波器个数
+  nb_filters: 64
+  # 卷积核大小
+  conv_kernel_size: 3
+  # 膨胀率
+  dilation_rate: [1, 1, 2]
+  # 膨胀卷积层重复次数
+  repeat_times: 4
+  # 是否使用CRF
+  use_crf: True
 
 train:
-  batch_size: 64
-  epochs: 25
-  train_mode: single
-  n_fold: 10
-  test_szie: 0.2
+  # bucket个数
   bucket_cnt: 100
+  # batch大小
+  batch_size: 64
+  # 最大迭代词数
+  epochs: 25
+  # 评估指标
+  metric: f1
+  # 交叉验证的次数
+  nb_fold: 10
+  # 训练模式，有single和fold两种
+  train_mode: single
+  # 测试集比例
+  test_size: 0.2
+
+data:
+  # 最大词数
+  max_words: 100
+  # 最大字符数
+  max_chars: 150
+  # 最大词内部字符数
+  max_inner_chars: 8
+  # 是否开启词内部序列
+  inner_char: False
+  # 是否需要分词
+  segment: True
+
+embed:
+  # 是否使用预训练词向量
+  pre: True
+  # 分别对应不同任务的词和字符向量的文件路径
+  classification:
+    word: ../data/embeddings/fasttext_cv_all_300d.txt
+    char: None
+  sequence_labeling:
+    word: None
+    char: None

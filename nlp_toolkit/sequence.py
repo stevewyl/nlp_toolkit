@@ -127,8 +127,9 @@ class IndexTransformer(BaseEstimator, TransformerMixin):
         y_true_label = p.inver_transform(y_pred)
     """
 
-    def __init__(self, max_words=80, max_inner_chars=8, lower=True,
+    def __init__(self, task_type, max_words=80, max_inner_chars=8, lower=True,
                  use_inner_char=False, initial_vocab=None):
+        self.task_type = task_type
         self.max_words = max_words
         self.max_inner_chars = max_inner_chars
         self.use_inner_char = use_inner_char
@@ -156,9 +157,10 @@ class IndexTransformer(BaseEstimator, TransformerMixin):
 
     def transform(self, X, y=None):
         word_ids = [self._word_vocab.doc2id(doc) for doc in X]
+        lengths = [len(line) for line in word_ids]
+        lengths = [self.max_words if l > self.max_words else l for l in lengths]
         word_ids = pad_sequences(
             word_ids, maxlen=self.max_words, padding='post')
-        lengths = [len(line) for line in word_ids]
         features = {'word': word_ids, 'length': lengths}
         if self.use_inner_char:
             char_ids = [[self._char_vocab.doc2id(w) for w in doc] for doc in X]
@@ -167,6 +169,8 @@ class IndexTransformer(BaseEstimator, TransformerMixin):
             features['inner_char'] = char_ids
         if y is not None:
             y = [self._label_vocab.doc2id(doc) for doc in y]
+            if self.task_type == 'sequence_labeling':
+                y = pad_sequences(y, maxlen=self.max_words, padding='post')
             y = to_categorical(y, self.label_size).astype(float)
             return features, y
         else:
@@ -175,21 +179,26 @@ class IndexTransformer(BaseEstimator, TransformerMixin):
     def fit_transform(self, X, y=None, **params):
         return self.fit(X, y).transform(X, y)
 
-    def inverse_transform(self, y, top_k=1, pct=False):
-        if top_k == 1:
-            ind_top = np.argmax(y, -1)
-            inverse_y = [self._label_vocab.id2doc([idx])[0] for idx in ind_top]
-            return inverse_y
-        elif top_k > 1:
-            ind_top = [top_elements(prob, top_k) for prob in y]
-            inverse_y = [self._label_vocab.id2doc(
-                id_list) for id_list in ind_top]
-            if not pct:
+    def inverse_transform(self, y, lengths=None, top_k=1, return_percentage=False):
+        if self.task_type == 'classification':
+            if top_k == 1:
+                ind_top = np.argmax(y, -1)
+                inverse_y = [self._label_vocab.id2doc([idx])[0] for idx in ind_top]
                 return inverse_y
-            else:
-                pct_top = [[prob[ind] for ind in ind_top[idx]]
-                           for idx, prob in enumerate(y)]
-                return inverse_y, pct_top
+            elif top_k > 1:
+                ind_top = [top_elements(prob, top_k) for prob in y]
+                inverse_y = [self._label_vocab.id2doc(id_list) for id_list in ind_top]
+                if not return_percentage:
+                    return inverse_y
+                else:
+                    pct_top = [[prob[ind] for ind in ind_top[idx]] for idx, prob in enumerate(y)]
+                    return inverse_y, pct_top
+        elif self.task_type == 'sequence_labeling':
+            ind_top = np.argmax(y, -1)
+            inverse_y = [self._label_vocab.id2doc(idx) for idx in ind_top]
+            if lengths is not None:
+                inverse_y = [iy[:l] for iy, l in zip(inverse_y, lengths)]
+            return inverse_y
 
     @property
     def word_vocab_size(self):
@@ -229,20 +238,27 @@ def pad_nested_sequences(sequences, max_sent_len, max_word_len, dtype='int32'):
     return x
 
 
-class TextSequence(Sequence):
+class BasicIterator(Sequence):
     """
     Wrapper for Keras Sequence Class
     """
 
-    def __init__(self, x, y=None, batch_size=1):
+    def __init__(self, x, y=None, batch_size=1, concat=False):
         self.x = x
         self.y = y
         self.batch_size = batch_size
+        self.concat = concat
 
     def __getitem__(self, idx):
         idx_begin = self.batch_size * idx
         idx_end = self.batch_size * (idx + 1)
-        batch_x = self.x[idx_begin: idx_end]
+        x_b = self.x[idx_begin: idx_end]
+        if self.concat:
+            x_word = x_b[:, :, 0]
+            x_char = x_b[:, :, 1:]
+            batch_x = {'word': x_word, 'char': x_char}
+        else:
+            batch_x = {'word': x_b}
         if self.y is not None:
             batch_y = self.y[idx_begin: idx_end]
             return batch_x, batch_y
@@ -257,16 +273,20 @@ def _roundto(val, batch_size):
     return int(math.ceil(val / batch_size)) * batch_size
 
 
-class BucketedSequence(Sequence):
+class BucketIterator(Sequence):
     """
     A Keras Sequence (dataset reader) of input sequences read in bucketed bins.
     Assumes all inputs are already padded using 'pad_sequences'
     (where post padding is prepended).
     """
 
-    def __init__(self, num_buckets, batch_size, seq_lengths, x_seq, y=None):
-        cnt_labels = y.shape[1]
+    def __init__(self, task_type, num_buckets, batch_size, seq_lengths,
+                 x_seq, y=None, concat=False):
+        cnt_labels = y.shape[-1]
         self.batch_size = batch_size
+        self.concat = concat
+        self.task_type = task_type
+
         # Count bucket sizes
         bucket_sizes, bucket_ranges = np.histogram(seq_lengths,
                                                    bins=num_buckets)
@@ -279,9 +299,19 @@ class BucketedSequence(Sequence):
         num_actual = len(actual_buckets)
         logger.info('Training with %d non-empty buckets' % num_actual)
 
-        self.bins = [(np.ndarray([bs, bsl], dtype=x_seq.dtype),
-                      np.ndarray([bs, cnt_labels], dtype=y.dtype))
-                     for bsl, bs in zip(bucket_seqlen, actual_bucket_sizes)]
+        if task_type == 'sequence_labeling':
+            if concat:
+                self.bins = [(np.ndarray([bs, bsl, x_seq.shape[-1]], dtype=x_seq.dtype),
+                              np.ndarray([bs, bsl, cnt_labels], dtype=y.dtype))
+                             for bsl, bs in zip(bucket_seqlen, actual_bucket_sizes)]
+            else:
+                self.bins = [(np.ndarray([bs, bsl], dtype=x_seq.dtype),
+                              np.ndarray([bs, bsl, cnt_labels], dtype=y.dtype))
+                             for bsl, bs in zip(bucket_seqlen, actual_bucket_sizes)]
+        elif task_type == 'classification':
+            self.bins = [(np.ndarray([bs, bsl], dtype=x_seq.dtype),
+                          np.ndarray([bs, cnt_labels], dtype=y.dtype))
+                         for bsl, bs in zip(bucket_seqlen, actual_bucket_sizes)]
         assert len(self.bins) == num_actual
 
         # Insert the sequences into the bins
@@ -290,8 +320,15 @@ class BucketedSequence(Sequence):
             for j in range(num_actual):
                 bsl = bucket_seqlen[j]
                 if sl < bsl or j == num_actual - 1:
-                    self.bins[j][0][bctr[j], :bsl] = x_seq[i, :bsl]
-                    self.bins[j][1][bctr[j], :] = y[i]
+                    if self.task_type == 'sequence_labeling':
+                        self.bins[j][1][bctr[j], :bsl, :] = y[i, :bsl, :]
+                        if self.concat:
+                            self.bins[j][0][bctr[j], :bsl, :] = x_seq[i, :bsl, :]
+                        else:
+                            self.bins[j][0][bctr[j], :bsl] = x_seq[i, :bsl]
+                    elif task_type == 'classification':
+                        self.bins[j][0][bctr[j], :bsl] = x_seq[i, :bsl]
+                        self.bins[j][1][bctr[j], :] = y[i]
                     bctr[j] += 1
                     break
 
@@ -329,7 +366,15 @@ class BucketedSequence(Sequence):
 
             # Found bin
             idx_end = min(xbin.shape[0], idx_end)  # Clamp to end of bin
+            x_b = xbin[idx_begin:idx_end]
+            if self.concat:
+                x_word = x_b[:, :, 0]
+                x_char = x_b[:, :, 1:]
+                batch_x = {'word': x_word, 'char': x_char}
+            else:
+                batch_x = {'word': x_b}
+            batch_y = ybin[idx_begin:idx_end]
 
-            return xbin[idx_begin:idx_end], ybin[idx_begin:idx_end]
+            return batch_x, batch_y
 
         raise ValueError('out of bounds')

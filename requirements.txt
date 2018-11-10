@@ -1,0 +1,9 @@
+tensorflow>=1.9.0
+Keras==2.2.4
+numpy>=1.14.3
+scikit-learn>=0.19.1
+seqeval>=0.0.5
+JPype1>=0.6.3
+pyhanlp>=0.1.44
+hanziconv>=0.3.2
+-e git+https://www.github.com/keras-team/keras-contrib.git#egg=keras-contrib

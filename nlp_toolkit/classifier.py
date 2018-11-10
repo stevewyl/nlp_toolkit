@@ -2,76 +2,129 @@
 Classifier Wrapper
 """
 
+import time
 from nlp_toolkit.model_zoo import bi_lstm_attention
 from nlp_toolkit.model_zoo import multi_head_self_attention
+from nlp_toolkit.model_zoo import textCNN
 from nlp_toolkit.trainer import Trainer
 from nlp_toolkit.utilities import logger
+from nlp_toolkit.sequence import BasicIterator
 
 
+# TODO
+# 1. evaluate func
 class Classifier(object):
     """
     Classifier Model Zoos. Include following models:
 
     1. TextCNN
-    2. DPCNN
-    3. Bi-GRU
-    4. Bi-LSTM-Attention
-    5. Multi-Head-Self-Attention
+    2. DPCNN (Deep Pyramid CNN)
+    3. Bi-LSTM-Attention
+    4. Multi-Head-Self-Attention (Transformer)
+    5. HAN (Hierachical Attention Network)
     """
 
-    def __init__(self, model_name, config):
+    def __init__(self, model_name, transformer, seq_type='bucket', config=None):
         self.model_name = model_name
-        self.config = config
-        self.model = self.get_model()
-        self.model_trainer = self.get_trainer()
+        self.transformer = transformer
+        self.mode = config['mode']
+        if self.mode == 'train':
+            assert config is not None
+            self.config = config
+            self.m_cfg = self.config[self.model_name]
+            self.seq_type = seq_type
+            if seq_type == 'bucket':
+                self.config['maxlen'] = None
+            self.model = self.get_model()
+            self.model_trainer = self.get_trainer()
+        elif self.mode == 'predict':
+            pass
+        else:
+            logger.warning('invalid mode name. Current only support "train" and "predict"')
 
     def get_model(self):
-        m_cfg = self.config[self.model_name]
         if self.model_name == 'bi_lstm_att':
             model = bi_lstm_attention(
-                nb_classes=m_cfg['nb_classes'],
-                nb_tokens=m_cfg['nb_tokens'],
-                maxlen=m_cfg['maxlen'],
-                embed_dim=m_cfg['embed_dim'],
-                embeddings=m_cfg['embeddings'],
-                final_dropout_rate=m_cfg['f_drop_rate'],
-                embed_dropout_rate=m_cfg['e_drop_rate'],
-                return_attention=m_cfg['return_att']
+                nb_classes=self.config['nb_classes'],
+                nb_tokens=self.config['nb_tokens'],
+                maxlen=self.config['maxlen'],
+                embedding_dim=self.config['embedding_dim'],
+                embeddings=self.config['word_embeddings'],
+                rnn_size=self.m_cfg['rnn_size'],
+                attention_dim=self.m_cfg['attention_dim'],
+                final_dropout_rate=self.m_cfg['final_drop_rate'],
+                embed_dropout_rate=self.m_cfg['embed_drop_rate'],
+                return_attention=self.m_cfg['return_att']
             )
         elif self.model_name == 'multi_head_self_att':
             model = multi_head_self_attention(
-                nb_classes=m_cfg['nb_classes'],
-                nb_tokens=m_cfg['nb_tokens'],
-                maxlen=m_cfg['maxlen'],
-                embed_dim=m_cfg['embed_dim'],
-                embeddings=m_cfg['embeddings'],
-                pos_embed=m_cfg['pos_embed']
+                nb_classes=self.config['nb_classes'],
+                nb_tokens=self.config['nb_tokens'],
+                maxlen=self.config['maxlen'],
+                embedding_dim=self.config['embedding_dim'],
+                embeddings=self.config['word_embeddings'],
+                pos_embed=self.m_cfg['pos_embed'],
+                nb_transfomer=self.m_cfg['nb_transfomer'],
+                final_dropout_rate=self.m_cfg['final_drop_rate']
+            )
+        elif self.model_name == 'text_cnn':
+            model = textCNN(
+                nb_classes=self.config['nb_classes'],
+                nb_tokens=self.config['nb_tokens'],
+                maxlen=self.config['maxlen'],
+                embedding_dim=self.config['embedding_dim'],
+                embeddings=self.config['word_embeddings'],
+                conv_kernel_size=self.m_cfg['conv_kernel_size'],
+                pool_size=self.m_cfg['pool_size'],
+                nb_filters=self.m_cfg['nb_filters'],
+                fc_size=self.m_cfg['fc_size']
             )
         else:
-            logger.error('The model name ' + self.model_name + ' is unknown')
+            logger.warning('The model name ' + self.model_name + ' is unknown')
+            model = None
         return model
 
     def get_trainer(self):
         t_cfg = self.config['train']
         model_trainer = Trainer(
             self.model,
-            batch_size=t_cfg['batch_size'],
-            max_epoch=t_cfg['epoch'],
             model_name=self.model_name,
+            task_type=self.config['task_type'],
+            batch_size=t_cfg['batch_size'],
+            max_epoch=t_cfg['epochs'],
             train_mode=t_cfg['train_mode'],
-            fold_cnt=t_cfg['n_fold'],
-            test_size=t_cfg['test_size']
+            fold_cnt=t_cfg['nb_fold'],
+            test_size=t_cfg['test_size'],
+            metric=t_cfg['metric']
         )
         return model_trainer
 
-    def train(self, x, y, transformer, seq='bucket'):
-        return self.model_trainer.train(x, y, transformer, seq)
+    def train(self, x, y):
+        if self.model_name == 'bi_lstm_att':
+            return_att = self.m_cfg['return_att']
+        else:
+            return_att = False
+        return self.model_trainer.train(
+            x, y, self.transformer, self.seq_type, return_att)
 
-    def predict(self, x):
+    def predict(self, x, n_labels, batch_size=64, return_attention=False):
+        start = time.time()
+        x_seq = BasicIterator(x, batch_size=batch_size)
+        result = self.model.model.predict_generator(x_seq)
+        y_pred = self.transformer.inverse_transform(result[:, :n_labels])
+        used_time = time.time() - start
+        logger.info('predict {} samples used {:4.1f}s'.format(len(x), used_time))
+        if result.shape[1] > n_labels:
+            attention = result[:, n_labels:]
+            return y_pred, attention
+        else:
+            return y_pred
+
+    def evaluate(self, x, y):
         pass
 
-    def load(self, model_name, weight_fname, para_fname):
-        if model_name == 'bi_lstm_att':
+    def load(self, weight_fname, para_fname):
+        if self.model_name == 'bi_lstm_att':
             self.model = bi_lstm_attention.load(weight_fname, para_fname)
-        elif model_name == 'multi_head_self_att':
+        elif self.model_name == 'multi_head_self_att':
             self.model = multi_head_self_attention.load(weight_fname, para_fname)

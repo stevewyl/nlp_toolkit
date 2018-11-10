@@ -18,12 +18,13 @@ def custom_categorical_crossentropy(y_true, y_pred, n):
 class Attention(Layer):
     """
     Basic attention layer.
+    Attention layers are normally used to find important tokens based on different labels.
     uses 'max trick' for numerical stability
     # Arguments:
         1. use_bias: whether to use bias
         2. use_context: whether to use context vector
         3. return_attention: whether to return attention weights as part of output
-        4. attention_dims: dimensionality of the inner attention
+        4. attention_dim: dimensionality of the inner attention
         5. activation: whether to use activation func in first MLP
     # Inputs:
         Tensor with shape (batch_size, time_steps, hidden_size)
@@ -37,13 +38,13 @@ class Attention(Layer):
                  use_bias=True,
                  use_context=True,
                  return_attention=False,
-                 attention_dims=None,
+                 attention_dim=None,
                  activation=True,
                  **kwargs):
         self.use_bias = use_bias
         self.use_context = use_context
         self.return_attention = return_attention
-        self.attention_dims = attention_dims
+        self.attention_dim = attention_dim
         self.activation = activation
         super(Attention, self).__init__(**kwargs)
 
@@ -51,25 +52,25 @@ class Attention(Layer):
         if len(input_shape) < 3:
             raise ValueError(
                 "Expected input shape of `(batch_size, time_steps, features)`, found `{}`".format(input_shape))
-        if self.attention_dims is None:
-            attention_dims = input_shape[-1]
+        if self.attention_dim is None:
+            attention_dim = input_shape[-1]
         else:
-            attention_dims = self.attention_dims
+            attention_dim = self.attention_dim
 
         self.kernel = self.add_weight(name='kernel',
-                                      shape=(input_shape[-1], attention_dims),
+                                      shape=(input_shape[-1], attention_dim),
                                       initializer="glorot_normal",
                                       trainable=True)
         if self.use_bias:
             self.bias = self.add_weight(name='bias',
-                                        shape=(attention_dims, 1),
+                                        shape=(attention_dim,),
                                         initializer="zeros",
                                         trainable=True)
         else:
             self.bias = None
         if self.use_context:
             self.context_kernel = self.add_weight(name='context_kernel',
-                                                  shape=(attention_dims, 1),
+                                                  shape=(attention_dim, 1),
                                                   initializer="glorot_normal",
                                                   trainable=True)
         else:
@@ -86,7 +87,7 @@ class Attention(Layer):
             ut = K.tanh(ut)
         if self.context_kernel:
             ut = K.dot(ut, self.context_kernel)
-        ut = K.squeeze(ut)
+        ut = K.squeeze(ut, axis=-1)
         # softmax
         at = K.exp(ut - K.max(ut, axis=-1, keepdims=True))
         if mask is not None:
@@ -112,13 +113,17 @@ class Attention(Layer):
         return (input_shape[0], output_len)
 
 
-class Self_Attention(Layer):
+class Self_Attentive(Layer):
+    """
+    From "A Structured Self-Attentive Sentence Embedding" (2017)
+    """
+    
     def __init__(self, ws1, ws2, punish, init='glorot_normal', **kwargs):
         self.kernel_initializer = initializers.get(init)
         self.weight_ws1 = ws1
         self.weight_ws2 = ws2
         self.punish = punish
-        super(Self_Attention, self).__init__(** kwargs)
+        super(Self_Attentive, self).__init__(** kwargs)
 
     def build(self, input_shape):
         self.Ws1 = self.add_weight(shape=(input_shape[-1], self.weight_ws1),
@@ -130,7 +135,7 @@ class Self_Attention(Layer):
                                    trainable=True,
                                    name='{}_Ws2'.format(self.name))
         self.batch_size = input_shape[0]
-        super(Self_Attention, self).build(input_shape)
+        super(Self_Attentive, self).build(input_shape)
 
     def compute_mask(self, input, input_mask=None):
         return None
@@ -139,7 +144,7 @@ class Self_Attention(Layer):
         uit = K.tanh(K.dot(x, self.Ws1))
         ait = K.dot(uit, self.Ws2)
         ait = K.permute_dimensions(ait, (0, 2, 1))
-        A = softmax(ait, axis=1)
+        A = K.softmax(ait, axis=1)
         M = K.batch_dot(A, x)
         if self.punish:
             A_T = K.permute_dimensions(A, (0, 2, 1))
