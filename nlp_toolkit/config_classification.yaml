@@ -1,0 +1,90 @@
+model:
+  bi_lstm_att:
+    # rnn隐层大小
+    rnn_size: 512
+    # attention层隐层大小
+    attention_dim: 128
+    # 向量层丢弃率
+    embed_drop_rate: 0.25
+    # 输出层前一层丢弃率
+    final_drop_rate: 0.5
+    # 是否返回attention权重
+    return_att: True
+
+  multi_head_self_att:
+    # head个数
+    nb_head: 8
+    # head大小
+    head_size: 16
+    # attention层个数
+    nb_transfomer: 2
+    # 是否使用位置嵌入向量
+    pos_embed: True
+    # 输出层前一层丢弃率
+    final_drop_rate: 0.5
+
+  text_cnn:
+    # 卷积核大小
+    conv_kernel_size: [3, 4, 5]
+    # 池化层核大小
+    pool_size: [2, 2, 2]
+    # 滤波器个数
+    nb_filters: 128
+    # 全连接层隐层大小
+    fc_size: 128
+
+  dpcnn:
+    # text_cnn特征
+    region_kernel_size: [3, 4, 5]
+    # 卷积核大小
+    conv_kernel_size: 3
+    # 池化层核大小
+    pool_size: 3
+    # cnn层个数
+    repeat_time: 2
+    # 输出层前一层丢弃率
+    final_drop_rate: 0.5
+    # 滤波器个数
+    nb_filters: 250
+
+train:
+  # bucket个数
+  nb_bucket: 100
+  # batch大小
+  batch_size: 64
+  # 最大迭代词数
+  epochs: 25
+  # 评估指标
+  metric: f1
+  # 交叉验证的次数
+  nb_fold: 10
+  # 训练模式，有single和fold两种
+  train_mode: single
+  # 测试集比例
+  test_size: 0.2
+  # early_stopping的终止条件
+  patiences: 3
+
+data:
+  # 最小的token粒度，有word和char两种
+  basic_token: word
+  # 最大词数
+  max_words: 100
+  # 最大字符数
+  max_chars: 150
+  # 最大词内部字符数
+  max_inner_chars: 8
+  # 是否开启词内部序列
+  inner_char: False
+
+embed:
+  # 是否使用预训练词向量
+  pre: True
+  # 词向量
+  word:
+    path: ../data/embeddings/fasttext_cv_all_300d.txt
+    dim: 256
+  # 字向量
+  char:
+    path: null
+    dim: 128

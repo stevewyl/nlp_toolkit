@@ -5,7 +5,7 @@ Sequence Labeler Wrapper
 import sys
 import time
 import numpy as np
-from nlp_toolkit.model_zoo import Word_RNN, IDCNN
+from nlp_toolkit.model_zoo import Word_RNN, IDCNN, Char_RNN
 from nlp_toolkit.trainer import Trainer
 from nlp_toolkit.utilities import logger
 from nlp_toolkit.sequence import BasicIterator
@@ -25,12 +25,13 @@ class Labeler(object):
         self.transformer = transformer
         if config:
             self.mode = config['mode']
+            self.extra_features = config['extra_features']
         else:
             self.mode = 'predict'
         if self.mode == 'train':
             assert config is not None
             self.config = config
-            self.m_cfg = self.config[self.model_name]
+            self.m_cfg = self.config['model'][self.model_name]
             self.seq_type = seq_type
             if seq_type == 'bucket':
                 self.config['maxlen'] = None
@@ -49,7 +50,7 @@ class Labeler(object):
                 nb_char_tokens=self.config['nb_char_tokens'],
                 maxlen=self.config['maxlen'],
                 embedding_dim=self.config['embedding_dim'],
-                embeddings=self.config['word_embeddings'],
+                embeddings=self.config['token_embeddings'],
                 inner_char=self.config['data']['inner_char'],
                 use_crf=self.m_cfg['use_crf'],
                 char_feature_method=self.m_cfg['char_feature_method'],
@@ -59,7 +60,25 @@ class Labeler(object):
                 nb_filters=self.m_cfg['nb_filters'],
                 conv_kernel_size=self.m_cfg['conv_kernel_size'],
                 drop_rate=self.m_cfg['drop_rate'],
-                re_drop_rate=self.m_cfg['re_drop_rate']
+                re_drop_rate=self.m_cfg['re_drop_rate'],
+                word_rnn_size=self.m_cfg['word_rnn_size']
+            )
+        elif self.model_name == 'char_rnn':
+            model = Char_RNN(
+                nb_classes=self.config['nb_classes'],
+                nb_tokens=self.config['nb_tokens'],
+                nb_seg_tokens=self.config['nb_seg_tokens'],
+                nb_radical_tokens=self.config['nb_radical_tokens'],
+                maxlen=self.config['maxlen'],
+                emebdding_dim=self.config['embedding_dim'],
+                use_seg=self.config['use_seg'],
+                use_radical=self.config['use_radical'],
+                use_crf=self.m_cfg['use_crf'],
+                rnn_type=self.m_cfg['rnn_type'],
+                nb_rnn_layers=self.m_cfg['nb_rnn_layers'],
+                drop_rate=self.m_cfg['drop_rate'],
+                re_drop_rate=self.m_cfg['re_drop_rate'],
+                char_rnn_size=self.m_cfg['char_rnn_size']
             )
         elif self.model_name == 'idcnn':
             model = IDCNN(
@@ -67,7 +86,7 @@ class Labeler(object):
                 nb_tokens=self.config['nb_tokens'],
                 maxlen=self.config['maxlen'],
                 embedding_dim=self.config['embedding_dim'],
-                embeddings=self.config['word_embeddings'],
+                embeddings=self.config['token_embeddings'],
                 use_crf=self.m_cfg['use_crf'],
                 nb_filters=self.m_cfg['nb_filters'],
                 conv_kernel_size=self.m_cfg['conv_kernel_size'],
@@ -92,7 +111,9 @@ class Labeler(object):
             fold_cnt=t_cfg['nb_fold'],
             test_size=t_cfg['test_size'],
             metric=t_cfg['metric'],
-            nb_bucket=t_cfg['nb_bucket']
+            nb_bucket=t_cfg['nb_bucket'],
+            patiences=t_cfg['patiences'],
+            extra_features=self.extra_features
         )
         return model_trainer
 
@@ -101,18 +122,32 @@ class Labeler(object):
             x, y, self.transformer, self.seq_type)
 
     def predict(self, x, batch_size=64):
-        if 'inner_char' in x.keys():
-            concat = True
-            x_char = x['inner_char']
-            x_word = x['word']
+        use_inner_char = self.transformer.use_inner_char
+        use_seg = self.transformer.use_seg
+        use_radical = self.transformer.use_radical
+        if use_inner_char or use_seg or use_radical:
+            x_word = x['token']
             x_word = np.expand_dims(x_word, axis=-1)
-            x = np.concatenate((x_word, x_char), axis=-1)
+            if use_inner_char:
+                concat = True
+                x = np.concatenate((x_word, x['inner_char']), axis=-1)
+            else:
+                concat = False
+                extra_features = []
+                if use_seg:
+                    x = np.concatenate((x_word, x['seg']), axis=-1)
+                    extra_features.append('seg')
+                if use_radical:
+                    x = np.concatenate((x_word, x['radical']), axis=-1)
+                    extra_features.append('radical')
         else:
             concat = False
-            x = x['word']
+            x = x['token']
 
         start = time.time()
-        x_seq = BasicIterator(x, batch_size=batch_size, concat=concat)
+        x_seq = BasicIterator(x, batch_size=batch_size,
+                              extra_features=extra_features,
+                              concat=concat)
         result = self.model.model.predict_generator(x_seq)
         y_pred = self.transformer.inverse_transform(result)
         used_time = time.time() - start

@@ -141,7 +141,7 @@ class History(Callback):
 
 
 def get_callbacks(history=None, log_dir=None, valid=None, metric='f1',
-                  transformer=None, early_stopping=True,
+                  transformer=None, early_stopping=True, patiences=3,
                   LRPlateau=True, top_n=5, attention=False):
     """
     Define list of callbacks for Keras model
@@ -178,12 +178,12 @@ def get_callbacks(history=None, log_dir=None, valid=None, metric='f1',
     if early_stopping:
         print('using Early Stopping')
         callbacks.append(EarlyStopping(
-            monitor=metric, patience=3, mode='max'))
+            monitor=metric, patience=patiences, mode='max'))
 
     if LRPlateau:
         print('using Reduce LR On Plateau')
         callbacks.append(ReduceLROnPlateau(
-            monitor=metric, factor=0.2, patience=1, min_lr=0.00001))
+            monitor=metric, factor=0.2, patience=patiences-2, min_lr=0.00001))
 
     if history:
         print('tracking loss history and metrics')

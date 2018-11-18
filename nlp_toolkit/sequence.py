@@ -12,6 +12,7 @@ from keras.preprocessing.sequence import pad_sequences
 from sklearn.externals import joblib
 from sklearn.base import BaseEstimator, TransformerMixin
 from nlp_toolkit.utilities import timer, logger
+from typing import Dict, List
 
 
 def top_elements(array, k):
@@ -108,13 +109,14 @@ class Vocabulary(object):
 class IndexTransformer(BaseEstimator, TransformerMixin):
     """
     Similar with Sklearn function for transforming text to index
+    Basic tokens are usually words.
 
     # Arguments:
-        1. max_words: maximum number of word tokens in one sentence
+        1. max_tokens: maximum number of basic tokens in one sentence
         2. max_inner_chars: maximum number of char tokens in one word
         3. lower: whether to lower tokers
         4. use_inner_char: whether to use inner char tokens depend on your model
-        5. initial_vocab: the additional word tokens which are not in corpus
+        5. initial_vocab: the additional basic tokens which are not in corpus
 
     # Usage：
         p = IndexTransformer()
@@ -127,51 +129,81 @@ class IndexTransformer(BaseEstimator, TransformerMixin):
         y_true_label = p.inver_transform(y_pred)
     """
 
-    def __init__(self, task_type, max_words=80, max_inner_chars=8, lower=True,
-                 use_inner_char=False, initial_vocab=None):
+    def __init__(self, task_type, max_tokens=80, max_inner_chars=8, lower=True,
+                 use_inner_char=False, initial_vocab=None,
+                 use_seg=False, use_radical=False, basic_token='word'):
+        self.basic_token = basic_token
         self.task_type = task_type
-        self.max_words = max_words
+        self.max_tokens = max_tokens
         self.max_inner_chars = max_inner_chars
         self.use_inner_char = use_inner_char
-        self._word_vocab = Vocabulary(lower=lower)
+        self.use_seg = use_seg
+        self.use_radical = use_radical
+        self._token_vocab = Vocabulary(lower=lower)
         self._label_vocab = Vocabulary(
             lower=False, unk_token=False, specials=None)
-        self._char_vocab = Vocabulary(lower=lower)
-
+        if use_inner_char:
+            self._inner_char_vocab = Vocabulary(lower=lower)
         if initial_vocab:
-            self._word_vocab.add_documents([initial_vocab])
-            self._char_vocab.add_documents(initial_vocab)
+            self._token_vocab.add_documents([initial_vocab])
+        if use_seg:
+            self._seg_vocab = Vocabulary(lower=False)
+        if use_radical:
+            self._radical_vocab = Vocabulary(lower=False)
 
     def fit(self, X, y=None):
-        self._word_vocab.add_documents(X)
-        self._word_vocab.build()
+        assert isinstance(X, dict)
+        self._token_vocab.add_documents(X['token'])
+        self._token_vocab.build()
         if y is not None:
             self._label_vocab.add_documents(y)
             self._label_vocab.build()
         if self.use_inner_char:
-            for doc in X:
-                self._char_vocab.add_documents(doc)
-            self._char_vocab.build()
+            for doc in X['token']:
+                self._inner_char_vocab.add_documents(doc)
+            self._inner_char_vocab.build()
+        if self.use_seg:
+            self._seg_vocab.add_documents(X['seg'])
+            self._seg_vocab.build()
+        if self.use_radical:
+            self._radical_vocab.add_documents(X['radical'])
+            self._radical_vocab.build()
 
         return self
 
     def transform(self, X, y=None):
-        word_ids = [self._word_vocab.doc2id(doc) for doc in X]
-        lengths = [len(line) for line in word_ids]
-        lengths = [self.max_words if l > self.max_words else l for l in lengths]
-        word_ids = pad_sequences(
-            word_ids, maxlen=self.max_words, padding='post')
-        features = {'word': word_ids, 'length': lengths}
+        tokens = X['token']
+        token_ids = [self._token_vocab.doc2id(doc) for doc in tokens]
+        lengths = [len(line) for line in token_ids]
+        lengths = [self.max_tokens if l > self.max_tokens else l for l in lengths]
+        token_ids = pad_sequences(
+            token_ids, maxlen=self.max_tokens, padding='post')
+        features = {'token': token_ids, 'length': lengths}
+
         if self.use_inner_char:
-            char_ids = [[self._char_vocab.doc2id(w) for w in doc] for doc in X]
+            char_ids = [[self._inner_char_vocab.doc2id(
+                w) for w in doc] for doc in tokens]
             char_ids = pad_nested_sequences(
-                char_ids, self.max_words, self.max_inner_chars)
+                char_ids, self.max_tokens, self.max_inner_chars)
             features['inner_char'] = char_ids
+
+        if self.use_seg:
+            seg_ids = [self._seg_vocab.doc2id(doc) for doc in X['seg']]
+            seg_ids = pad_sequences(seg_ids, maxlen=self.max_tokens, padding='post')
+            features['seg'] = seg_ids
+
+        if self.use_radical:
+            radical_ids = [self._radical_vocab.doc2id(doc) for doc in X['radical']]
+            radical_ids = pad_sequences(
+                radical_ids, maxlen=self.max_tokens, padding='post')
+            features['radical'] = radical_ids
+
         if y is not None:
             y = [self._label_vocab.doc2id(doc) for doc in y]
             if self.task_type == 'sequence_labeling':
-                y = pad_sequences(y, maxlen=self.max_words, padding='post')
+                y = pad_sequences(y, maxlen=self.max_tokens, padding='post')
             y = to_categorical(y, self.label_size).astype(float)
+
             return features, y
         else:
             return features
@@ -201,12 +233,20 @@ class IndexTransformer(BaseEstimator, TransformerMixin):
             return inverse_y
 
     @property
-    def word_vocab_size(self):
-        return len(self._word_vocab)
+    def token_vocab_size(self):
+        return len(self._token_vocab)
 
     @property
     def char_vocab_size(self):
-        return len(self._char_vocab)
+        return len(self._inner_char_vocab)
+
+    @property
+    def seg_vocab_size(self):
+        return len(self._seg_vocab)
+
+    @property
+    def radical_vocab_size(self):
+        return len(self._radical_vocab)
 
     @property
     def label_size(self):
@@ -243,11 +283,13 @@ class BasicIterator(Sequence):
     Wrapper for Keras Sequence Class
     """
 
-    def __init__(self, x, y=None, batch_size=1, concat=False):
+    def __init__(self, x, y=None, batch_size=1,
+                 extra_features: List[str] = None, concat=False):
         self.x = x
         self.y = y
         self.batch_size = batch_size
         self.concat = concat
+        self.extra_features = extra_features
 
     def __getitem__(self, idx):
         idx_begin = self.batch_size * idx
@@ -256,9 +298,13 @@ class BasicIterator(Sequence):
         if self.concat:
             x_word = x_b[:, :, 0]
             x_char = x_b[:, :, 1:]
-            batch_x = {'word': x_word, 'char': x_char}
+            batch_x = {'token': x_word, 'char': x_char}
+        elif self.extra_features:
+            batch_x = {'token': x_b[:, :, 0]}
+            for k, feature in enumerate(self.extra_features):
+                batch_x[feature] = x_b[:, :, k+1]
         else:
-            batch_x = {'word': x_b}
+            batch_x = {'token': x_b}
         if self.y is not None:
             batch_y = self.y[idx_begin: idx_end]
             return batch_x, batch_y
@@ -281,12 +327,12 @@ class BucketIterator(Sequence):
     """
 
     def __init__(self, task_type, num_buckets, batch_size, seq_lengths,
-                 x_seq, y=None, concat=False):
+                 x_seq, y=None, extra_features: List[str] = None, concat=False):
         cnt_labels = y.shape[-1]
         self.batch_size = batch_size
         self.concat = concat
         self.task_type = task_type
-
+        self.extra_features = extra_features
         # Count bucket sizes
         bucket_sizes, bucket_ranges = np.histogram(seq_lengths,
                                                    bins=num_buckets)
@@ -300,7 +346,7 @@ class BucketIterator(Sequence):
         logger.info('Training with %d non-empty buckets' % num_actual)
 
         if task_type == 'sequence_labeling':
-            if concat:
+            if concat or extra_features:
                 self.bins = [(np.ndarray([bs, bsl, x_seq.shape[-1]], dtype=x_seq.dtype),
                               np.ndarray([bs, bsl, cnt_labels], dtype=y.dtype))
                              for bsl, bs in zip(bucket_seqlen, actual_bucket_sizes)]
@@ -322,7 +368,7 @@ class BucketIterator(Sequence):
                 if sl < bsl or j == num_actual - 1:
                     if self.task_type == 'sequence_labeling':
                         self.bins[j][1][bctr[j], :bsl, :] = y[i, :bsl, :]
-                        if self.concat:
+                        if self.concat or self.extra_features:
                             self.bins[j][0][bctr[j], :bsl, :] = x_seq[i, :bsl, :]
                         else:
                             self.bins[j][0][bctr[j], :bsl] = x_seq[i, :bsl]
@@ -370,9 +416,14 @@ class BucketIterator(Sequence):
             if self.concat:
                 x_word = x_b[:, :, 0]
                 x_char = x_b[:, :, 1:]
-                batch_x = {'word': x_word, 'char': x_char}
+                batch_x = {'token': x_word, 'char': x_char}
+            elif self.extra_features:
+                batch_x = {}
+                batch_x['token'] = x_b[:, :, 0]
+                for k, feature in enumerate(self.extra_features):
+                    batch_x[feature] = x_b[:, :, k+1]
             else:
-                batch_x = {'word': x_b}
+                batch_x = {'token': x_b}
             batch_y = ybin[idx_begin:idx_end]
 
             return batch_x, batch_y

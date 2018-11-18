@@ -3,6 +3,8 @@ some nlp process utilty functions
 """
 
 import io
+import re
+import sys
 import time
 import logging
 import numpy as np
@@ -11,6 +13,172 @@ from itertools import groupby
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(filename)s[line:%(lineno)d] - %(levelname)s: %(message)s')
 logger = logging.getLogger('nlp_toolkit')
+
+global cn_pattern
+global en_pattern
+global num_pattern
+global special_tokens
+cn_pattern = re.compile(r'[\u4e00-\u9fa5]')
+en_pattern = re.compile(r'[A-Za-z]')
+num_pattern = re.compile(r'[0-9]')
+special_tokens = set(['<s>', '<lan>', '<ss>'])
+
+
+# [1, ['a', 'b], [True, False]] ---> [1, 'a', 'b', True, False]
+def flatten_gen(x):
+    for i in x:
+        if isinstance(i, list) or isinstance(i, tuple):
+            for inner_i in i:
+                yield inner_i
+        else:
+            yield i
+
+
+# judge char type ['cn', 'en', 'num', 'other']
+def char_type(word):
+    for char in word:
+        if cn_pattern.search(char):
+            yield (char, 'cn')
+        elif en_pattern.search(char):
+            yield (char, 'en')
+        elif num_pattern.search(char):
+            yield (char, 'num')
+        else:
+            yield (char, 'other')
+
+
+# split word into chars
+def split_cn_en(word):
+    new_word = [c for c in char_type(word)]
+    tmp = []
+    new_word_len = len(new_word)
+    for ix, item in enumerate(new_word):
+        if item[1] in ['en', 'num']:
+            if ix < new_word_len - 1:
+                if new_word[ix+1][1] == item[1]:
+                    tmp.append(item[0])
+                else:
+                    tmp.append(item[0])
+                    yield ''.join(tmp)
+                    tmp = []
+            else:
+                tmp.append(item[0])
+                yield ''.join(tmp)
+        else:
+            yield item[0]
+
+
+# reassign token labels according new tokens
+def extract_char(word_list, label_list=None, use_seg=False):
+    if label_list:
+        for word, label in zip(word_list, label_list):
+            # label = label.strip('#')
+            single_check = word in special_tokens or not re.search(r'[^a-z0-9]+', word)
+            if len(word) == 1 or single_check:
+                if use_seg:
+                    yield (word, label, 'S')
+                else:
+                    yield (word, label)
+            else:
+                new_word = list(split_cn_en(word))
+                if label == 'O':
+                    new_label = ['O'] * len(new_word)
+                elif label.startswith('I'):
+                    new_label = [label] * len(new_word)
+                else:
+                    label_i = 'I' + label[1:]
+                    if label.startswith('B'):
+                        new_label = [label] + [label_i] * (len(new_word) - 1)
+                    elif label.startswith('E'):
+                        new_label = [label_i] * (len(new_word) - 1) + [label]
+                if use_seg:
+                    seg_tag = ['M'] * len(new_word)
+                    seg_tag[0] = 'B'
+                    seg_tag[-1] = 'E'
+                    yield (new_word, new_label, seg_tag)
+                else:
+                    yield (new_word, new_label)
+    else:
+        for word in word_list:
+            single_check = word in special_tokens or not re.search(r'[^a-z0-9]+', word)
+            if len(word) == 1 or single_check:
+                if use_seg:
+                    yield (word, 'S')
+                else:
+                    yield (word)
+            else:
+                new_word = list(split_cn_en(word))
+                if use_seg:
+                    seg_tag = ['M'] * len(new_word)
+                    seg_tag[0] = 'B'
+                    seg_tag[-1] = 'E'
+                    yield (new_word, seg_tag)
+                else:
+                    yield (new_word)
+
+
+# flatten results
+def char_label(word_list, label_list=None, use_seg=False):
+    results = list(
+        zip(*[item for item in extract_char(word_list, label_list, use_seg)]))
+    new_word = list(flatten_gen(results[0]))
+    if label_list:
+        new_label = list(flatten_gen(results[1]))
+        if use_seg:
+            seg_tags = list(flatten_gen(results[-1]))
+            assert len(new_word) == len(new_label) == len(seg_tags)
+            return (new_word, new_label, seg_tags)
+        else:
+            assert len(new_word) == len(new_label)
+            return (new_word, new_label)
+    else:
+        if use_seg:
+            seg_tags = list(flatten_gen(results[-1]))
+            assert len(new_word) == len(seg_tags)
+            return (new_word, seg_tags)
+        else:
+            return (new_word)
+
+
+# get radical token by chars
+def get_radical(d, char_list):
+    return [[d[char] if char in d else '<unk>' for char in item]
+            for item in char_list]
+
+
+def word2char(word_list, label_list=None, task_type='',
+              use_seg=False, use_radical=False, radical_dict=None):
+    """
+    convert basic token from word to char
+    """
+
+    if task_type == 'classification':
+        assert label_list is None
+        assert use_radical is False
+        assert use_seg is False
+        return [char for word in word_list for char in list(split_cn_en(word))]
+    elif task_type == 'sequence_labeling':
+        results = char_label(word_list, label_list, use_seg)
+        if label_list:
+            if use_seg:
+                chars, new_labels, seg_tags = results
+            else:
+                chars, new_labels = results
+            new_result = {'token': chars, 'label': new_labels}
+        else:
+            if use_seg:
+                chars, seg_tags = results
+            else:
+                chars = results
+            new_result = {'token': chars}
+        if use_seg:
+            new_result['seg'] = seg_tags
+        if use_radical:
+            new_result['radical'] = list(flatten_gen(get_radical(radical_dict, chars)))
+        return new_result
+    else:
+        logger.error('invalid task type')
+        sys.exit()
 
 
 def shorten_word(word):
@@ -72,3 +240,39 @@ def load_vectors(fname, vocab):
             embedding_matrix[i] = embedding_vector
     logger.info('OOV rate: {:04.2f} %'.format(1 - cnt / len(vocab._token2id)))
     return embedding_matrix, d
+
+
+def convert_seq_format(fin_name, fout_name, dest_format='conll'):
+    if dest_format == 'conll':
+        basic2conll(fin_name, fout_name)
+    elif dest_format == 'basic':
+        conll2basic(fin_name, fout_name)
+    else:
+        logger.warning('invalid data format')
+
+
+def basic2conll(fin_name, fout_name):
+    data = [line.strip() for line in open(fin_name, 'r', encoding='utf8')]
+    with open(fout_name, 'w', encoding='utf8') as fout:
+        for line in data:
+            for item in line.split('\t'):
+                token, label = item.rsplit('###')
+                label = label.strip('#')
+                fout.write(token + '\t' + label + '\n')
+            fout.write('\n')
+
+
+def conll2basic(fin_name, fout_name):
+    data = [line.strip() for line in open(fin_name, 'r', encoding='utf8')]
+    with open(fout_name, 'w', encoding='utf8') as fout:
+        tmp = []
+        for line in data:
+            if line:
+                token, label = line.split('\t')
+                label = label.strip('\t')
+                item = token + '###' + label
+                tmp.append(item)
+            else:
+                new_line = '\t'.join(tmp) + '\n'
+                fout.write(new_line)
+                tmp = []

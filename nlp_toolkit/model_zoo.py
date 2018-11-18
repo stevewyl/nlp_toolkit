@@ -15,7 +15,8 @@ from keras.layers import SpatialDropout1D, Dropout
 from keras.layers import multiply, add, subtract
 from keras.layers import LSTM, GRU, Bidirectional, Conv1D
 from keras.layers import TimeDistributed, Activation, Flatten, Lambda
-from keras.layers import GlobalMaxPooling1D, GlobalAveragePooling1D, MaxPool1D
+from keras.layers import GlobalMaxPooling1D, GlobalAveragePooling1D, MaxPooling1D
+from keras.layers import BatchNormalization
 from keras_contrib.layers import CRF
 from nlp_toolkit.layer import Attention, Multi_Head_Attention, Position_Embedding
 from nlp_toolkit.layer import custom_binary_crossentropy, custom_categorical_crossentropy
@@ -33,7 +34,8 @@ class Base_Model(object):
     def save_params(self, file_path):
         with open(file_path, 'w') as f:
             invalid_params = {'_loss', '_acc', 'model',
-                              'embeddings', 'char_embeddings',
+                              'embeddings', 'char_embeddings', 'token_embeddings',
+                              'region_embeddings', 'word_embeddings',
                               'word_embed', 'embed', 'embed_drop', 'char_embed',
                               'activation', 'lstm', 'pool', 'attention', 'attention_layer',
                               'cnn_list', 'pool_list', 'conv',
@@ -115,7 +117,7 @@ class textCNN(Base_Model):
         # core layer: multi-channel cnn-pool layers
         self.cnn_list = [Conv1D(
             nb_filters, f, padding='same', name='conv_%d' % k) for k, f in enumerate(conv_kernel_size)]
-        self.pool_list = [MaxPool1D(p, name='pool_%d' % k) for k, p in enumerate(pool_size)]
+        self.pool_list = [MaxPooling1D(p, name='pool_%d' % k) for k, p in enumerate(pool_size)]
         self.fc = Dense(fc_size, activation='relu', kernel_initializer='he_normal')
 
         # embedding layer
@@ -130,10 +132,10 @@ class textCNN(Base_Model):
             weights=word_embeddings,
             input_length=maxlen,
             embeddings_regularizer=embed_reg,
-            name='embedding')
+            name='token_embeddings')
 
     def forward(self):
-        model_input = Input(shape=(self.maxlen,), dtype='int32', name='word')
+        model_input = Input(shape=(self.maxlen,), dtype='int32', name='token')
         x = self.embed(model_input)
         cnn_combine = []
 
@@ -147,7 +149,7 @@ class textCNN(Base_Model):
         x = Dropout(self.final_dropout_rate)(x)
         x = self.fc(x)
 
-        outputs = tc_output_logits(x, self.nb_classes)
+        outputs = tc_output_logits(x, self.nb_classes, self.final_dropout_rate)
 
         self.model = Model(inputs=model_input,
                            outputs=outputs, name="TextCNN")
@@ -214,7 +216,7 @@ class bi_lstm_attention(Base_Model):
             mask_zero=True,
             input_length=maxlen,
             embeddings_regularizer=embed_reg,
-            name='embedding')
+            name='token_embeddings')
 
         self.activation = Activation('tanh')
         self.embed_drop = SpatialDropout1D(
@@ -226,7 +228,7 @@ class bi_lstm_attention(Base_Model):
             return_attention=return_attention, name='attlayer')
 
     def forward(self):
-        model_input = Input(shape=(self.maxlen,), dtype='int32', name='word')
+        model_input = Input(shape=(self.maxlen,), dtype='int32', name='token')
         x = self.embed(model_input)
         x = self.activation(x)
 
@@ -308,14 +310,14 @@ class multi_head_self_attention(Base_Model):
             weights=word_embeddings,
             input_length=maxlen,
             embeddings_regularizer=embed_reg,
-            name='embedding')
+            name='token_embeddings')
         self.pos_embed_layer = Position_Embedding(name='position_embedding')
         self.transformers = [Multi_Head_Attention(
             nb_head, head_size, name='self_attention_%d' % i) for i in range(nb_transfomer)]
         self.pool = GlobalAveragePooling1D()
 
     def forward(self):
-        model_input = Input(shape=(self.maxlen,), dtype='int32', name='word')
+        model_input = Input(shape=(self.maxlen,), dtype='int32', name='token')
         x = self.embed(model_input)
         if self.pos_embed:
             x = self.pos_embed_layer(x)
@@ -325,6 +327,86 @@ class multi_head_self_attention(Base_Model):
         outputs = tc_output_logits(x, self.nb_classes, self.final_dropout_rate)
         self.model = Model(inputs=model_input,
                            outputs=outputs, name="Self_Multi_Head_Attention")
+
+    def get_loss(self):
+        if self.nb_classes == 2:
+            return 'binary_crossentropy'
+        elif self.nb_classes > 2:
+            return 'categorical_crossentropy'
+
+    def get_metrics(self):
+        return ['acc']
+
+
+class DPCNN(Base_Model):
+    """
+    Deep Pyramid CNN
+    Three key point of DPCNN:
+        1. region embeddings
+        2. fixed feature maps
+        3. residual connection
+    """
+
+    def __init__(self, nb_classes, nb_tokens, maxlen,
+                 embedding_dim=256, embeddings=None,
+                 region_kernel_size=[3, 4, 5],
+                 conv_kernel_size=3, nb_filters=250, pool_size=3,
+                 repeat_time=2, final_dropout_rate=0.25):
+        super(DPCNN).__init__()
+        self.nb_classes = nb_classes
+        self.nb_tokens = nb_tokens
+        self.maxlen = maxlen
+        self.embedding_dim = embedding_dim
+        if embeddings is not None:
+            self.word_embeddings = [embeddings]
+        else:
+            self.word_embeddings = None
+        self.region_kernel_size = region_kernel_size
+        self.conv_kernel_size = conv_kernel_size
+        self.nb_filters = nb_filters
+        self.pool_size = pool_size
+        self.repeat_time = repeat_time
+        self.final_dropout_rate = final_dropout_rate
+
+    def forward(self):
+        model_input = Input(shape=(self.maxlen,), dtype='int32', name='token')
+        # region embedding
+        x = Embedding(self.nb_tokens, self.embedding_dim, input_length=self.maxlen,
+                      weights=self.word_embeddings, name='token_embeddings')(model_input)
+        if isinstance(self.region_kernel_size, list):
+            region = [Conv1D(self.nb_filters, f, padding='same')(x) for f in self.region_kernel_size]
+            region_embedding = add(region, name='region_embeddings')
+        else:
+            region_embedding = Conv1D(
+                self.nb_filters, self.region_kernel_size, padding='same', name='region_embeddings')(x)
+        # same padding convolution
+        x = Activation('relu')(region_embedding)
+        x = Conv1D(self.nb_filters, self.conv_kernel_size, padding='same', name='conv_1')(x)
+        x = Activation('relu')(x)
+        x = Conv1D(self.nb_filters, self.conv_kernel_size, padding='same', name='conv_2')(x)
+        # residual connection
+        x = add([x, region_embedding], name='pre_block_hidden')
+
+        for k in range(self.repeat_time):
+            x = self._block(x, k)
+        x = GlobalMaxPooling1D()(x)
+        outputs = tc_output_logits(x, self.nb_classes, self.final_dropout_rate)
+
+        self.model = Model(inputs=model_input,
+                           outputs=outputs, name="Deep Pyramid CNN")
+
+    def _block(self, x, k):
+        x = MaxPooling1D(self.pool_size, strides=2)(x)
+        last_x = x
+        x = Activation('relu')(x)
+        x = Conv1D(self.nb_filters, self.conv_kernel_size,
+                   padding='same', name='block_%d_conv_1' % k)(x)
+        x = Activation('relu')(x)
+        x = Conv1D(self.nb_filters, self.conv_kernel_size,
+                   padding='same', name='block_%d_conv_2' % k)(x)
+        # residual connection
+        x = add([x, last_x])
+        return x
 
     def get_loss(self):
         if self.nb_classes == 2:
@@ -421,7 +503,7 @@ class Word_RNN(Base_Model):
         self.fc_sigmoid = Dense(embedding_dim, activation='sigmoid')
 
     def forward(self):
-        word_ids = Input(shape=(self.maxlen,), dtype='int32', name='word')
+        word_ids = Input(shape=(self.maxlen,), dtype='int32', name='token')
         input_data = [word_ids]
         x = self.word_embed(word_ids)
 
@@ -490,6 +572,92 @@ class Word_RNN(Base_Model):
         return self._acc
 
 
+class Char_RNN(Base_Model):
+    """
+    Similar model structure to Word_RNN. But use char as basic token.
+    And some useful features are included: 1. radicals 2. segmentation tag 3. nchar
+    """
+
+    def __init__(self, nb_classes, nb_tokens, maxlen,
+                 emebdding_dim=64, use_crf=True,
+                 use_seg=False, use_radical=False,
+                 nb_seg_tokens=None, nb_radical_tokens=None,
+                 rnn_type='lstm', nb_rnn_layers=2,
+                 char_rnn_size=128, drop_rate=0.5,
+                 re_drop_rate=0.15):
+        self.nb_classes = nb_classes
+        self.nb_tokens = nb_tokens
+        self.maxlen = maxlen
+        self.embedding_dim = emebdding_dim
+        self.use_crf = use_crf
+        self.use_seg = use_seg
+        self.use_radical = use_radical
+        self.rnn_type = rnn_type
+        self.nb_rnn_layers = nb_rnn_layers
+        self.drop_rate = drop_rate
+        self.re_drop_rate = re_drop_rate
+        self.char_rnn_size = char_rnn_size
+        if use_seg:
+            self.nb_seg_tokens = nb_seg_tokens
+        if use_radical:
+            self.nb_radical_tokens = nb_radical_tokens
+
+        super(Char_RNN).__init__()
+
+    def forward(self):
+        char_ids = Input(shape=(self.maxlen,), dtype='int32', name='token')
+        input_data = [char_ids]
+        char_embed = Embedding(input_dim=self.nb_tokens,
+                               output_dim=self.embedding_dim,
+                               mask_zero=True,
+                               name='char_embedding')(char_ids)
+        embed_features = [char_embed]
+        if self.use_seg:
+            seg_ids = Input(shape=(self.maxlen,), dtype='int32', name='seg')
+            input_data.append(seg_ids)
+            seg_emebd = Embedding(input_dim=self.nb_seg_tokens,
+                                  output_dim=8, mask_zero=True,
+                                  name='seg_embedding')(seg_ids)
+            embed_features.append(seg_emebd)
+        if self.use_radical:
+            radical_ids = Input(shape=(self.maxlen,), dtype='int32', name='radical')
+            input_data.append(radical_ids)
+            radical_embed = Embedding(input_dim=self.nb_radical_tokens,
+                                      output_dim=32, mask_zero=True,
+                                      name='radical_embedding')(radical_ids)
+            embed_features.append(radical_embed)
+        if self.use_seg or self.use_radical:
+            x = concatenate(embed_features, axis=-1, name='embed')
+        else:
+            x = char_embed
+        x = BatchNormalization()(x)
+
+        for i in range(self.nb_rnn_layers):
+            if self.rnn_type == 'lstm':
+                x = Bidirectional(
+                    LSTM(self.char_rnn_size, dropout=self.drop_rate,
+                         recurrent_dropout=self.re_drop_rate,
+                         return_sequences=True), name='char_lstm_%d' % (i+1))(x)
+            elif self.rnn_type == 'gru':
+                x = Bidirectional(
+                    GRU(self.char_rnn_size, dropout=self.drop_rate,
+                        recurrent_dropout=self.re_drop_rate,
+                        return_sequences=True), name='char_gru_%d' % (i+1))(x)
+            else:
+                logger.warning('invalid rnn type, only support lstm and gru')
+                break
+
+        outputs, self._loss, self._acc = sl_output_logits(
+            x, self.nb_classes, self.use_crf)
+        self.model = Model(inputs=input_data, outputs=outputs)
+
+    def get_loss(self):
+        return self._loss
+
+    def get_metrics(self):
+        return self._acc
+
+
 class IDCNN(Base_Model):
     """
     Iterated Dilated Convolution Nerual Networks with CRF
@@ -524,7 +692,7 @@ class IDCNN(Base_Model):
             self.word_embeddings = embeddings
 
     def forward(self):
-        word_ids = Input(shape=(self.maxlen,), dtype='int32', name='word')
+        word_ids = Input(shape=(self.maxlen,), dtype='int32', name='token')
         input_data = [word_ids]
         embed = Embedding(input_dim=self.nb_tokens,
                           output_dim=self.embedding_dim,

@@ -10,7 +10,7 @@ def highlight(word, att_weight):
 
 def mk_html(sentence, att_weights):
     html = ""
-    for word, att_weight in zip(sentence, att_weights):
+    for word, att_weight in zip(sentence.split(' '), att_weights):
         html += ' ' + highlight(word, att_weight)
     return html + "<br><br>\n"
 
@@ -21,7 +21,7 @@ def attention_visualization(texts, attention_weights, lengths,
                       for i in range(len(lengths))]
     with open(output_fname, 'w') as fin:
         for t, a in zip(texts, attention_true):
-            fin.write(mk_html(t.split(' '), a))
+            fin.write(mk_html(t, a))
 
 
 def loss_acc_curve():

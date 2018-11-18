@@ -13,6 +13,8 @@ from nlp_toolkit.callbacks import get_callbacks, History
 from nlp_toolkit.utilities import logger
 from nlp_toolkit.sequence import BasicIterator, BucketIterator
 from nlp_toolkit.layer import custom_binary_crossentropy, custom_categorical_crossentropy
+from typing import Dict
+from copy import deepcopy
 
 
 class Trainer(object):
@@ -44,7 +46,8 @@ class Trainer(object):
     def __init__(self, model,
                  model_name,
                  task_type,
-                 metric='f1',
+                 metric,
+                 extra_features=[],
                  batch_size=64,
                  max_epoch=25,
                  optimizer=Adam(),
@@ -56,11 +59,13 @@ class Trainer(object):
                  train_mode='single',
                  fold_cnt=10,
                  test_size=0.2,
-                 shuffle=True,):
+                 shuffle=True,
+                 patiences=3):
         self.model = model
         self.model_name = model_name
         self.task_type = task_type
         self.metric = metric
+        self.extra_features = extra_features
         self.batch_size = batch_size
         self.max_epoch = max_epoch
         self.optimizer = optimizer
@@ -69,6 +74,7 @@ class Trainer(object):
         self.fold_cnt = fold_cnt
         self.shuffle = shuffle
         self.nb_bucket = nb_bucket
+        self.patiences = patiences
         base_dir = Path(checkpoint_path)
         if not base_dir.exists():
             base_dir.mkdir()
@@ -83,15 +89,15 @@ class Trainer(object):
             logger.info('use bucket sequence to speed up model training')
             train_batches = BucketIterator(
                 self.task_type, self.nb_bucket, self.batch_size,
-                x_len_train, x_train, y_train, self.concat)
+                x_len_train, x_train, y_train, self.extra_features, concat=self.concat)
             valid_batches = BucketIterator(
                 self.task_type, self.nb_bucket, self.batch_size,
-                x_len_valid, x_valid, y_valid, self.concat)
+                x_len_valid, x_valid, y_valid, self.extra_features, concat=self.concat)
         elif seq_type == 'basic':
             train_batches = BasicIterator(
-                x_train, y_train, self.batch_size, self.concat)
+                x_train, y_train, self.batch_size, self.extra_features, concat=self.concat)
             valid_batches = BasicIterator(
-                x_valid, y_valid, self.batch_size, self.concat)
+                x_valid, y_valid, self.batch_size, self.extra_features, concat=self.concat)
         else:
             logger.warning('invalid data iterator type, only supports "basic" or "bucket"')
         return train_batches, valid_batches
@@ -101,15 +107,22 @@ class Trainer(object):
               return_attention=False, use_crf=False):
         assert isinstance(x, dict)
         x_len = np.array(x['length'])
-        if 'inner_char' in x.keys():
-            self.concat = True
-            x_char = x['inner_char']
-            x_word = x['word']
-            x_word = np.expand_dims(x_word, axis=-1)
-            x = np.concatenate((x_word, x_char), axis=-1)
+        if 'inner_char' in x.keys() or self.extra_features:
+            x_token = x['token']
+            x_token = np.expand_dims(x_token, axis=-1)
+            if 'inner_char' in x.keys():
+                self.concat = True
+                x_char = x['inner_char']
+                x = np.concatenate((x_token, x_char), axis=-1)
+            elif self.extra_features:
+                self.concat = False
+                x_eatra_features = [np.expand_dims(x[name], axis=-1)
+                                    for name in self.extra_features]
+                x = np.concatenate([x_token] + x_eatra_features, axis=-1)
         else:
             self.concat = False
-            x = x['word']
+            x = x['token']
+
         if self.train_mode == 'single':
             # model initialization
             self.model.forward()
@@ -163,17 +176,19 @@ class Trainer(object):
                 callbacks=self.callbacks,
                 shuffle=self.shuffle,
                 validation_data=valid_batches)
-            print('best {}: {:04.2f}'.format(self.metric, max(history.metrics)))
+            print('best {}: {:04.2f}'.format(self.metric, max(history.metrics) * 100))
             return self.model.model, history
 
         elif self.train_mode == 'fold':
             fold_size = len(x) // self.fold_cnt
             scores = []
             logger.info('%d-fold starts!' % self.fold_cnt)
+
             for fold_id in range(self.fold_cnt):
                 print('\n------------------------ fold ' + str(fold_id) + '------------------------')
 
-                self.model.forward()
+                model_init = deepcopy(self.model)
+                model_init.forward()
 
                 fold_start = fold_size * fold_id
                 fold_end = fold_start + fold_size
@@ -181,7 +196,7 @@ class Trainer(object):
                     fold_end = len(x)
                 if fold_id == 0:
                     logger.info('%s model structure...' % self.model_name)
-                    self.model.model.summary()
+                    model_init.model.summary()
 
                 x_train = np.concatenate([x[:fold_start], x[fold_end:]])
                 x_len_train = np.concatenate(
@@ -201,12 +216,12 @@ class Trainer(object):
                     valid=valid_batches, transformer=transformer,
                     attention=return_attention)
 
-                self.model.model.compile(
-                    loss=self.model.get_loss(),
+                model_init.model.compile(
+                    loss=model_init.get_loss(),
                     optimizer=self.optimizer,
-                    metrics=self.model.get_metrics())
+                    metrics=model_init.get_metrics())
 
-                self.model.model.fit_generator(
+                model_init.model.fit_generator(
                     generator=train_batches,
                     epochs=self.max_epoch,
                     callbacks=self.callbacks,
@@ -215,4 +230,4 @@ class Trainer(object):
                 scores.append(max(history.metrics))
 
             logger.info('training finished! The mean {} scores: {:4.2f}(±{:4.2f})'.format(
-                self.metric, np.mean(scores), np.std(scores)))
+                self.metric, np.mean(scores) * 100, np.std(scores) * 100))

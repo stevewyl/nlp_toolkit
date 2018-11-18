@@ -295,3 +295,12 @@ class Multi_Head_Attention(Layer):
 
     def compute_output_shape(self, input_shape):
         return (input_shape[0][0], input_shape[0][1], self.output_dim)
+
+
+def kmax_pooling(Layer):
+    pass
+
+
+# TODO to handle all kinds of embedding layer variants 
+def feature_embedding(features, inner_char=False):
+    pass

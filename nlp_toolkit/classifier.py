@@ -6,7 +6,7 @@ import sys
 import time
 from nlp_toolkit.model_zoo import bi_lstm_attention
 from nlp_toolkit.model_zoo import multi_head_self_attention
-from nlp_toolkit.model_zoo import textCNN
+from nlp_toolkit.model_zoo import textCNN, DPCNN
 from nlp_toolkit.trainer import Trainer
 from nlp_toolkit.utilities import logger
 from nlp_toolkit.sequence import BasicIterator
@@ -30,12 +30,13 @@ class Classifier(object):
         self.transformer = transformer
         if config:
             self.mode = config['mode']
+            self.extra_features = config['extra_features']
         else:
             self.mode = 'predict'
         if self.mode == 'train':
             assert config is not None
             self.config = config
-            self.m_cfg = self.config[self.model_name]
+            self.m_cfg = self.config['model'][self.model_name]
             self.seq_type = seq_type
             if seq_type == 'bucket':
                 self.config['maxlen'] = None
@@ -53,7 +54,7 @@ class Classifier(object):
                 nb_tokens=self.config['nb_tokens'],
                 maxlen=self.config['maxlen'],
                 embedding_dim=self.config['embedding_dim'],
-                embeddings=self.config['word_embeddings'],
+                embeddings=self.config['token_embeddings'],
                 rnn_size=self.m_cfg['rnn_size'],
                 attention_dim=self.m_cfg['attention_dim'],
                 final_dropout_rate=self.m_cfg['final_drop_rate'],
@@ -66,7 +67,7 @@ class Classifier(object):
                 nb_tokens=self.config['nb_tokens'],
                 maxlen=self.config['maxlen'],
                 embedding_dim=self.config['embedding_dim'],
-                embeddings=self.config['word_embeddings'],
+                embeddings=self.config['token_embeddings'],
                 pos_embed=self.m_cfg['pos_embed'],
                 nb_transfomer=self.m_cfg['nb_transfomer'],
                 final_dropout_rate=self.m_cfg['final_drop_rate']
@@ -77,11 +78,25 @@ class Classifier(object):
                 nb_tokens=self.config['nb_tokens'],
                 maxlen=self.config['maxlen'],
                 embedding_dim=self.config['embedding_dim'],
-                embeddings=self.config['word_embeddings'],
+                embeddings=self.config['token_embeddings'],
                 conv_kernel_size=self.m_cfg['conv_kernel_size'],
                 pool_size=self.m_cfg['pool_size'],
                 nb_filters=self.m_cfg['nb_filters'],
                 fc_size=self.m_cfg['fc_size']
+            )
+        elif self.model_name == 'dpcnn':
+            model = DPCNN(
+                nb_classes=self.config['nb_classes'],
+                nb_tokens=self.config['nb_tokens'],
+                maxlen=self.config['maxlen'],
+                embedding_dim=self.config['embedding_dim'],
+                embeddings=self.config['token_embeddings'],
+                region_kernel_size=self.m_cfg['region_kernel_size'],
+                conv_kernel_size=self.m_cfg['conv_kernel_size'],
+                pool_size=self.m_cfg['pool_size'],
+                nb_filters=self.m_cfg['nb_filters'],
+                repeat_time=self.m_cfg['repeat_time'],
+                final_dropout_rate=self.m_cfg['final_drop_rate']
             )
         else:
             logger.warning('The model name ' + self.model_name + ' is unknown')
@@ -100,7 +115,9 @@ class Classifier(object):
             fold_cnt=t_cfg['nb_fold'],
             test_size=t_cfg['test_size'],
             metric=t_cfg['metric'],
-            nb_bucket=t_cfg['nb_bucket']
+            nb_bucket=t_cfg['nb_bucket'],
+            patiences=t_cfg['patiences'],
+            extra_features=self.extra_features
         )
         return model_trainer
 
@@ -113,7 +130,7 @@ class Classifier(object):
             x, y, self.transformer, self.seq_type, return_att)
 
     def predict(self, x, batch_size=64, return_attention=False):
-        x = x['word']
+        x = x['token']
         n_labels = len(self.transformer._label_vocab._id2token)
         start = time.time()
         x_seq = BasicIterator(x, batch_size=batch_size)

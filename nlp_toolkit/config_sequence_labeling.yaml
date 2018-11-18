@@ -1,0 +1,104 @@
+model:
+  word_rnn:
+    # 词级别rnn隐层大小
+    word_rnn_size: 128
+    # 字符级别rnn隐层大小
+    char_rnn_size: 32
+    # 是否使用CRF
+    use_crf: True
+    # 词内部字符信息表征方式，有cnn和rnn两种
+    char_feature_method: rnn
+    # 词和词内部字符信息的连接方式，有concat和attention两种
+    integration_method: attention
+    # rnn层的类别，有lstm和gru两种
+    rnn_type: lstm
+    # rnn层的个数
+    nb_rnn_layers: 2
+    # 滤波器个数
+    nb_filters: 64
+    # 卷积核大小
+    conv_kernel_size: 2
+    # 丢弃率
+    drop_rate: 0.5
+    # rnn层的内部丢弃率
+    re_drop_rate: 0.15
+
+  char_rnn:
+    # 是否使用偏旁部首
+    use_radical: False
+    # 是否使用分词信息
+    use_seg: False
+    # 是否使用CRF
+    use_crf: True 
+    # 字符级别rnn隐层大小
+    char_rnn_size: 64
+    # rnn层的类别，有lstm和gru两种
+    rnn_type: lstm
+    # rnn层的个数
+    nb_rnn_layers: 2
+    # 丢弃率
+    drop_rate: 0.5
+    # rnn层的内部丢弃率
+    re_drop_rate: 0.15
+
+  idcnn:
+    # 丢弃率
+    drop_rate: 0.5
+    # 滤波器个数
+    nb_filters: 64
+    # 卷积核大小
+    conv_kernel_size: 3
+    # 膨胀率
+    dilation_rate: [1, 1, 2]
+    # 膨胀卷积层重复次数
+    repeat_times: 4
+    # 是否使用CRF
+    use_crf: True
+
+train:
+  # bucket个数
+  nb_bucket: 100
+  # batch大小
+  batch_size: 64
+  # 最大迭代词数
+  epochs: 25
+  # 评估指标
+  metric: f1_seq
+  # 交叉验证的次数
+  nb_fold: 10
+  # 训练模式，有single和fold两种
+  train_mode: single
+  # 测试集比例
+  test_size: 0.2
+  # early_stopping的终止条件
+  patiences: 3
+
+data:
+  # 最小的token粒度，有word和char两种
+  basic_token: word
+  # 最大词数
+  max_words: 80
+  # 最大字符数
+  max_chars: 120
+  # 最大词内部字符数
+  max_inner_chars: 8
+  # 是否开启词内部序列
+  inner_char: False
+  # 数据格式，有basic和conll两种
+  format: basic
+  # 是否使用偏旁部首
+  use_radical: False
+  # 是否使用分词信息
+  use_seg: False
+
+embed:
+  # 是否使用预训练词向量
+  pre: False
+  # 词向量
+  word:
+    path: null
+    dim: 64
+  # 字向量
+  char:
+    path: null
+    dim: 32
