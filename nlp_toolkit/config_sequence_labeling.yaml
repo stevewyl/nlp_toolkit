@@ -7,7 +7,7 @@ model:
     # 是否使用CRF
     use_crf: True
     # 词内部字符信息表征方式，有cnn和rnn两种
-    char_feature_method: rnn
+    char_feature_method: cnn
     # 词和词内部字符信息的连接方式，有concat和attention两种
     integration_method: attention
     # rnn层的类别，有lstm和gru两种
@@ -83,7 +83,7 @@ data:
   # 最大词内部字符数
   max_inner_chars: 8
   # 是否开启词内部序列
-  inner_char: False
+  inner_char: True
   # 数据格式，有basic和conll两种
   format: basic
   # 是否使用偏旁部首

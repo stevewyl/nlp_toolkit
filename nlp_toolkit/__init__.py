@@ -1,3 +1,4 @@
+import gc
 import logging
 import tensorflow as tf
 from keras.backend.tensorflow_backend import set_session
@@ -10,3 +11,5 @@ logging.basicConfig(level=logging.INFO)
 tf_config = tf.ConfigProto()
 tf_config.gpu_options.allow_growth = True
 set_session(tf.Session(config=tf_config))
+
+gc.disable()

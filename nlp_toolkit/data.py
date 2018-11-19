@@ -96,6 +96,9 @@ class Dataset(object):
                 logger.info('transformer loaded')
                 self.transformer = IndexTransformer.load(tran_fname)
                 self.basic_token = self.transformer.basic_token
+                self.use_seg = self.transformer.use_seg
+                self.use_radical = self.transformer.use_radical
+                self.inner_char = self.transformer.use_inner_char
             else:
                 logger.error("please input the transformer's filepath")
                 sys.exit()
@@ -174,7 +177,7 @@ class Dataset(object):
 
     def transform(self):
         if self.task_type == 'classification':
-            self.texts = (self.clean(line) for line in self.texts)
+            self.texts = [self.clean(line) for line in self.texts]
             if self.mode == 'train':
                 x, y = zip(*[(x1.split(' '), y1.split(' '))
                              for x1, y1 in zip(self.texts, self.labels) if x1])
@@ -187,14 +190,14 @@ class Dataset(object):
                 x = self.texts
                 y = self.labels
                 if self.basic_token == 'char':
-                    new_results = [word2char(x1, x2, self.task_type, self.use_seg, self.use_radical)
+                    new_results = [word2char(x1, x2, self.task_type, self.use_seg, self.use_radical, self.radical_dict)
                                    for x1, x2 in zip(self.texts, self.labels)]
                     x = [item['token'] for item in new_results]
                     y = [item['label'] for item in new_results]
             elif self.mode == 'predict':
                 x = self.texts
                 if self.basic_token == 'char':
-                    new_results = [word2char(x, None, 'sequence_labeling', self.use_seg, self.use_radical)
+                    new_results = [word2char(x, None, 'sequence_labeling', self.use_seg, self.use_radical, self.radical_dict)
                                    for x in self.texts]
                     x = [item['token'] for item in new_results]
             if self.use_seg:
@@ -229,6 +232,9 @@ class Dataset(object):
             self.config['extra_features'] = []
             if self.inner_char:
                 self.config['nb_char_tokens'] = self.transformer.char_vocab_size
+            else:
+                self.config['nb_char_tokens'] = 0
+                self.config['use_inner_char'] = False
             if self.use_seg:
                 self.config['nb_seg_tokens'] = self.transformer.seg_vocab_size
                 self.config['extra_features'].append('seg')

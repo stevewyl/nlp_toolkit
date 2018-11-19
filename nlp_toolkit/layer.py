@@ -117,7 +117,7 @@ class Self_Attentive(Layer):
     """
     From "A Structured Self-Attentive Sentence Embedding" (2017)
     """
-    
+
     def __init__(self, ws1, ws2, punish, init='glorot_normal', **kwargs):
         self.kernel_initializer = initializers.get(init)
         self.weight_ws1 = ws1

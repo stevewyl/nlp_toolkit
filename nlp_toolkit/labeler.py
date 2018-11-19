@@ -125,6 +125,7 @@ class Labeler(object):
         use_inner_char = self.transformer.use_inner_char
         use_seg = self.transformer.use_seg
         use_radical = self.transformer.use_radical
+        extra_features = []
         if use_inner_char or use_seg or use_radical:
             x_word = x['token']
             x_word = np.expand_dims(x_word, axis=-1)
@@ -133,7 +134,6 @@ class Labeler(object):
                 x = np.concatenate((x_word, x['inner_char']), axis=-1)
             else:
                 concat = False
-                extra_features = []
                 if use_seg:
                     x = np.concatenate((x_word, x['seg']), axis=-1)
                     extra_features.append('seg')
