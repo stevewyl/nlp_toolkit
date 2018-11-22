@@ -4,9 +4,9 @@ Classifier Wrapper
 
 import sys
 import time
-from nlp_toolkit.model_zoo import bi_lstm_attention
-from nlp_toolkit.model_zoo import multi_head_self_attention
-from nlp_toolkit.model_zoo import textCNN, DPCNN
+from nlp_toolkit.models import bi_lstm_attention
+from nlp_toolkit.models import Transformer
+from nlp_toolkit.models import textCNN, DPCNN
 from nlp_toolkit.trainer import Trainer
 from nlp_toolkit.utilities import logger
 from nlp_toolkit.sequence import BasicIterator
@@ -61,16 +61,17 @@ class Classifier(object):
                 embed_dropout_rate=self.m_cfg['embed_drop_rate'],
                 return_attention=self.m_cfg['return_att']
             )
-        elif self.model_name == 'multi_head_self_att':
-            model = multi_head_self_attention(
+        elif self.model_name == 'transformer':
+            model = Transformer(
                 nb_classes=self.config['nb_classes'],
                 nb_tokens=self.config['nb_tokens'],
                 maxlen=self.config['maxlen'],
                 embedding_dim=self.config['embedding_dim'],
                 embeddings=self.config['token_embeddings'],
                 pos_embed=self.m_cfg['pos_embed'],
-                nb_transfomer=self.m_cfg['nb_transfomer'],
-                final_dropout_rate=self.m_cfg['final_drop_rate']
+                nb_transformer=self.m_cfg['nb_transformer'],
+                final_dropout_rate=self.m_cfg['final_drop_rate'],
+                embed_dropout_rate=self.m_cfg['embed_drop_rate']
             )
         elif self.model_name == 'text_cnn':
             model = textCNN(
@@ -82,7 +83,8 @@ class Classifier(object):
                 conv_kernel_size=self.m_cfg['conv_kernel_size'],
                 pool_size=self.m_cfg['pool_size'],
                 nb_filters=self.m_cfg['nb_filters'],
-                fc_size=self.m_cfg['fc_size']
+                fc_size=self.m_cfg['fc_size'],
+                embed_dropout_rate=self.m_cfg['embed_drop_rate']
             )
         elif self.model_name == 'dpcnn':
             model = DPCNN(
@@ -96,7 +98,8 @@ class Classifier(object):
                 pool_size=self.m_cfg['pool_size'],
                 nb_filters=self.m_cfg['nb_filters'],
                 repeat_time=self.m_cfg['repeat_time'],
-                final_dropout_rate=self.m_cfg['final_drop_rate']
+                final_dropout_rate=self.m_cfg['final_drop_rate'],
+                embed_dropout_rate=self.m_cfg['embed_drop_rate']
             )
         else:
             logger.warning('The model name ' + self.model_name + ' is unknown')
@@ -152,9 +155,11 @@ class Classifier(object):
         if self.model_name == 'bi_lstm_att':
             self.model = bi_lstm_attention.load(weight_fname, para_fname)
         elif self.model_name == 'multi_head_self_att':
-            self.model = multi_head_self_attention.load(weight_fname, para_fname)
+            self.model = Transformer.load(weight_fname, para_fname)
         elif self.model_name == 'text_cnn':
             self.model = textCNN.load(weight_fname, para_fname)
+        elif self.model_name == 'dpcnn':
+            self.model = DPCNN.load(weight_fname, para_fname)
         else:
             logger.warning('invalid model name')
             sys.exit()

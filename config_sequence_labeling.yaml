@@ -20,6 +20,8 @@ model:
     conv_kernel_size: 2
     # 丢弃率
     drop_rate: 0.5
+    # 词向量层丢弃率
+    embed_drop_rate: 0.15
     # rnn层的内部丢弃率
     re_drop_rate: 0.15
 
@@ -36,12 +38,16 @@ model:
     rnn_type: lstm
     # rnn层的个数
     nb_rnn_layers: 2
+    # 词向量层丢弃率
+    embed_drop_rate: 0.15
     # 丢弃率
     drop_rate: 0.5
     # rnn层的内部丢弃率
     re_drop_rate: 0.15
 
   idcnn:
+    # 词向量层丢弃率
+    embed_drop_rate: 0.15
     # 丢弃率
     drop_rate: 0.5
     # 滤波器个数

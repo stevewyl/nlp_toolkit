@@ -12,7 +12,7 @@ from sklearn.metrics import precision_recall_fscore_support
 from nlp_toolkit.callbacks import get_callbacks, History
 from nlp_toolkit.utilities import logger
 from nlp_toolkit.sequence import BasicIterator, BucketIterator
-from nlp_toolkit.layer import custom_binary_crossentropy, custom_categorical_crossentropy
+from nlp_toolkit.modules.custom_loss import custom_binary_crossentropy, custom_categorical_crossentropy
 from typing import Dict
 from copy import deepcopy
 
@@ -107,12 +107,12 @@ class Trainer(object):
               return_attention=False, use_crf=False):
         assert isinstance(x, dict)
         x_len = np.array(x['length'])
-        if 'inner_char' in x.keys() or self.extra_features:
+        if 'char' in x.keys() or self.extra_features:
             x_token = x['token']
             x_token = np.expand_dims(x_token, axis=-1)
-            if 'inner_char' in x.keys():
+            if 'char' in x.keys():
                 self.concat = True
-                x_char = x['inner_char']
+                x_char = x['char']
                 x = np.concatenate((x_token, x_char), axis=-1)
             elif self.extra_features:
                 self.concat = False
@@ -164,8 +164,9 @@ class Trainer(object):
             if not self.checkpoint_path.exists():
                 self.checkpoint_path.mkdir()
             transformer.save(self.checkpoint_path / 'transformer.h5')
-            self.model.save_params(
-                self.checkpoint_path / 'model_parameters.json')
+            invalid_params = self.model.invalid_params
+            param_file = self.checkpoint_path / 'model_parameters.json'
+            self.model.save_params(param_file, invalid_params)
             logger.info('saving model parameters and transformer to {}'.format(
                 self.checkpoint_path))
 

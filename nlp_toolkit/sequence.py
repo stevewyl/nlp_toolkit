@@ -174,22 +174,22 @@ class IndexTransformer(BaseEstimator, TransformerMixin):
     def transform(self, X, y=None):
         tokens = X['token']
         token_ids = [self._token_vocab.doc2id(doc) for doc in tokens]
-        lengths = [len(line) for line in token_ids]
+        lengths = (len(line) for line in token_ids)
         lengths = [self.max_tokens if l > self.max_tokens else l for l in lengths]
         token_ids = pad_sequences(
             token_ids, maxlen=self.max_tokens, padding='post')
         features = {'token': token_ids, 'length': lengths}
 
         if self.use_inner_char:
-            char_ids = [[self._inner_char_vocab.doc2id(
-                w) for w in doc] for doc in tokens]
+            char_ids = [[self._inner_char_vocab.doc2id(w) for w in doc] for doc in tokens]
             char_ids = pad_nested_sequences(
                 char_ids, self.max_tokens, self.max_inner_chars)
-            features['inner_char'] = char_ids
+            features['char'] = char_ids
 
         if self.use_seg:
             seg_ids = [self._seg_vocab.doc2id(doc) for doc in X['seg']]
-            seg_ids = pad_sequences(seg_ids, maxlen=self.max_tokens, padding='post')
+            seg_ids = pad_sequences(
+                seg_ids, maxlen=self.max_tokens, padding='post')
             features['seg'] = seg_ids
 
         if self.use_radical:
@@ -258,7 +258,7 @@ class IndexTransformer(BaseEstimator, TransformerMixin):
     @classmethod
     def load(cls, file_path):
         p = joblib.load(file_path)
-        print('data transformer loaded')
+        # print('data transformer loaded')
         return p
 
 
@@ -425,7 +425,6 @@ class BucketIterator(Sequence):
             else:
                 batch_x = {'token': x_b}
             batch_y = ybin[idx_begin:idx_end]
-
             return batch_x, batch_y
 
         raise ValueError('out of bounds')

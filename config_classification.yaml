@@ -5,21 +5,23 @@ model:
     # attention层隐层大小
     attention_dim: 128
     # 向量层丢弃率
-    embed_drop_rate: 0.25
+    embed_drop_rate: 0.15
     # 输出层前一层丢弃率
     final_drop_rate: 0.5
     # 是否返回attention权重
     return_att: True
 
-  multi_head_self_att:
+  transformer:
     # head个数
     nb_head: 8
     # head大小
     head_size: 16
     # attention层个数
-    nb_transfomer: 2
+    nb_transformer: 2
     # 是否使用位置嵌入向量
     pos_embed: True
+    # 词向量层丢弃率
+    embed_drop_rate: 0.15
     # 输出层前一层丢弃率
     final_drop_rate: 0.5
 
@@ -32,6 +34,8 @@ model:
     nb_filters: 128
     # 全连接层隐层大小
     fc_size: 128
+    # 词向量层丢弃率
+    embed_drop_rate: 0.15
 
   dpcnn:
     # text_cnn特征
@@ -42,6 +46,8 @@ model:
     pool_size: 3
     # cnn层个数
     repeat_time: 2
+    # 词向量层丢弃率
+    embed_drop_rate: 0.15
     # 输出层前一层丢弃率
     final_drop_rate: 0.5
     # 滤波器个数

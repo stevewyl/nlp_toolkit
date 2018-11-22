@@ -4,4 +4,5 @@ numpy>=1.14.3
 scikit-learn>=0.19.1
 seqeval>=0.0.5
 hanziconv>=0.3.2
+jieba>=0.39
 -e git+https://www.github.com/keras-team/keras-contrib.git#egg=keras-contrib

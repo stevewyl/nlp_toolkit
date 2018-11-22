@@ -3,7 +3,9 @@ Text preprocess utilties
 """
 
 import re
+import os
 import sys
+from pathlib import Path
 from hanziconv import HanziConv
 from typing import Dict
 from nlp_toolkit.sequence import IndexTransformer
@@ -43,7 +45,6 @@ class Dataset(object):
     def __init__(self, mode, fname='', tran_fname='',
                  config=None, task_type=None, use_radical=False):
         self.fname = fname
-        self.use_radical = use_radical
         if task_type:
             if mode == 'train' and config is None:
                 logger.error('please specify the config file path')
@@ -55,6 +56,9 @@ class Dataset(object):
             except:
                 logger.error('please check your config filename')
                 sys.exit()
+        self.use_seg = False
+        self.use_radical = False
+        self.radical_dict = None
         if mode == 'train':
             self.data_config = config['data']
             self.basic_token = self.data_config['basic_token']
@@ -63,16 +67,14 @@ class Dataset(object):
                 if task_type == 'sequence_labeling' and (self.data_config['use_seg'] or self.data_config['use_radical']):
                     logger.warning('please set use_seg or use_radical as False if your basic token is word')
                 self.inner_char = self.data_config['inner_char']
-                self.use_seg = False
-                self.use_radical = False
             elif self.basic_token == 'char':
                 self.max_tokens = self.data_config['max_chars']
                 if self.data_config['inner_char']:
                     logger.warning('please set inner_char as False in config file')
-                    self.data_config['inner_char'] = False
                 self.inner_char = False
-                self.use_seg = self.data_config['use_seg'] 
-                self.use_radical = self.data_config['use_radical']
+                if self.task_type == 'sequence_labeling':
+                    self.use_seg = self.data_config['use_seg']
+                    self.use_radical = self.data_config['use_radical']
             else:
                 logger.error('invalid token type, only support word and char')
                 sys.exit()
@@ -88,7 +90,7 @@ class Dataset(object):
                     sys.exit()
             self.transformer = IndexTransformer(
                 self.task_type, self.max_tokens, self.data_config['max_inner_chars'],
-                use_inner_char=self.data_config['inner_char'],
+                use_inner_char=self.inner_char,
                 use_seg=self.use_seg, use_radical=self.use_radical,
                 basic_token=self.basic_token)
         elif mode == 'predict':
@@ -103,8 +105,9 @@ class Dataset(object):
                 logger.error("please input the transformer's filepath")
                 sys.exit()
         if self.use_radical:
+            radical_file = Path(os.path.dirname(os.path.realpath(__file__))).parent / 'data' / 'dict' / 'radical.txt'
             self.radical_dict = {line.split()[0]: line.split()[1].strip()
-                                 for line in open('./data/radical.txt', encoding='utf8')}
+                                 for line in open(radical_file, encoding='utf8')}
         self.mode = mode
         if fname:
             self.load_data()
@@ -122,7 +125,7 @@ class Dataset(object):
                 data = (line.strip() for line in open(self.fname, 'r', encoding='utf8'))
                 if self.data_config['format'] == 'basic':
                     self.texts, self.labels = zip(
-                        *[zip(*[item.rsplit('###') for item in line.split('\t')]) for line in data])
+                        *[zip(*[item.rsplit('###', 1) for item in line.split('\t')]) for line in data])
                 elif self.data_config['format'] == 'conll':
                     self.texts, self.labels = self.process_conll(data)
                 else:
@@ -185,32 +188,25 @@ class Dataset(object):
                 x = [x1.split(' ') for x1 in self.texts]
             if self.basic_token == 'char':
                 x = [word2char(item, task_type='classification') for item in x]
+            x = {'token': x}
         elif self.task_type == 'sequence_labeling':
             if self.mode == 'train':
-                x = self.texts
-                y = self.labels
-                if self.basic_token == 'char':
-                    new_results = [word2char(x1, x2, self.task_type, self.use_seg, self.use_radical, self.radical_dict)
-                                   for x1, x2 in zip(self.texts, self.labels)]
-                    x = [item['token'] for item in new_results]
-                    y = [item['label'] for item in new_results]
+                if self.basic_token == 'word':
+                    x = {'token': self.texts}
+                    y = self.labels
+                elif self.basic_token == 'char':
+                    x = [word2char(x1, x2, self.task_type, self.use_seg, self.use_radical,
+                                   self.radical_dict) for x1, x2 in zip(self.texts, self.labels)]
+                    x = {k: [dic[k] for dic in x] for k in x[0]}
+                    y = x['label']
+                    del x['label']
             elif self.mode == 'predict':
-                x = self.texts
-                if self.basic_token == 'char':
-                    new_results = [word2char(x, None, 'sequence_labeling', self.use_seg, self.use_radical, self.radical_dict)
-                                   for x in self.texts]
-                    x = [item['token'] for item in new_results]
-            if self.use_seg:
-                seg_tags = [item['seg'] for item in new_results]
-            if self.use_radical:
-                radicals = [item['radical'] for item in new_results]
-
-        x = {'token': x}
-        if self.task_type == 'sequence_labeling':
-            if self.use_seg:
-                x['seg'] = seg_tags
-            if self.use_radical:
-                x['radical'] = radicals
+                if self.basic_token == 'word':
+                    x = self.texts
+                elif self.basic_token == 'char':
+                    x = [word2char(t, None, self.task_type, self.use_seg,
+                                   self.use_radical, self.radical_dict) for t in self.texts]
+                    x = {k: [dic[k] for dic in x] for k in x[0]}
 
         if self.mode == 'train':
             self.config['mode'] = self.mode

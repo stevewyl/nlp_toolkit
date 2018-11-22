@@ -4,7 +4,7 @@
 
 本仓库复现了一些近几年比较火的nlp论文。所有的代码是基于keras开发的。
 
-不到10行代码，你就可以快速训练一个文本分类模型或序列标注模型。
+不到10行代码，你就可以快速训练一个文本分类模型或序列标注模型，或者可以体验基于名词短语切分的分词器
 
 ## 安装
 
@@ -22,6 +22,13 @@ pip install -r requirements-gpu.txt
 pip install git+https://www.github.com/keras-team/keras-contrib.git
 ```
 
+### 安装错误
+1. ImportError: cannot import name 'normalize_data_format'
+
+```bash
+pip install -U keras
+```
+
 ## 使用方法
 
 本仓库的框架图：
@@ -34,9 +41,10 @@ pip install git+https://www.github.com/keras-team/keras-contrib.git
 
 2. Model Zoo & Layer：近几年在该任务中常用的模型汇总及一些Keras的自定义层
 
-   自定义层有如下：
+   目前支持的自定义层有如下：
 
-   * 通用注意力层 🆗
+   * 1D注意力层 🆗
+   * 2D注意力层 🆗
    * 多头注意力层 🆗
    * 位置嵌入层 🆗
    * K-max池化层
@@ -50,6 +58,8 @@ pip install git+https://www.github.com/keras-team/keras-contrib.git
     * N折交叉验证：支持交叉验证来考验模型的真实能力
 
 4. Classifier & Sequence Labeler：封装类，支持不同的训练任务
+
+5. Application：目前工具箱内封装了基于jieba的名词短语分词器 Chunk_Segmentor
 
 简单的用法如下：
 
@@ -77,9 +87,33 @@ x_seq = dataset.transform()
 text_classifier = Classifier('bi_lstm_att', dataset.transformer)
 text_classifier.load(weight_fname='your_model_weights.h5', para_fname='your_model_parameters.json')
 y_pred = text_classifier.predict(x_seq)
+
+# chunk分词
+# 第一次import的时候，会自动下载模型和字典数据
+# 支持单句和多句文本的输入格式，建议以列表的形式传入分词器
+from nlp_toolkit.chunk_segmentor import Chunk_Segmentor
+cutter = Chunk_Segmentor()
+s = '这是一个能够输出名词短语的分词器，欢迎试用！'
+res = [item for item in cutter.cut([s] * 10000)] # 1080ti上耗时8s
+# 提供两个版本，accurate为精确版，fast为快速版但召回会降低一些，默认精确版
+cutter = Chunk_Segmentor(mode='accurate')
+cutter = Chunk_Segmentor(mode='fast')
+# 限定词+中心词的形式, 默认开启
+cutter.cut(s, qualifier=False)
+# 是否输出词性， 默认开启
+cutter.cut(s, pos=False)
+# 输出格式（词列表，词性列表，名词短语集合）
+[
+    (
+        ['这', '是', '一个', '能够', '输出', '名词_短语', '的', '分词器', ',', '欢迎', '试用', '!'],
+        ['r', 'v', 'mq', 'v', 'vn', 'np', 'ude1', 'np', 'w', 'v', 'v', 'w'],
+        ['分词器', '名词_短语']
+    )
+    ...
+]
 ```
 
-更多使用细节，请阅读**examples**文件夹中的Jupyter Notebook
+更多使用细节，请阅读**examples**文件夹中的Jupyter Notebook和chunk_segmentor页面的[README](https://github.com/stevewyl/nlp_toolkit/nlp_toolkit/chunk_segmentor)
 
 ### 数据格式
 
@@ -138,6 +172,7 @@ y_pred = text_classifier.predict(x_seq)
 3. 预测：不同任务每一行均为预先分好词的文本序列
 
 4. 支持简单的自己添加数据的方法
+
    ```python
    dataset = Dataset(task_type='classification', mode='train', config=config)
    # classification
@@ -253,6 +288,7 @@ embed: 词向量，pre表示是否使用预训练词向量
 ### 序列标注
 
 测试数据集：
+
 1. 简历工作经历，chunk，数据规模：58K
 
     Model                   | 10-fold_f1   | Model Size   | Time per epoch
@@ -272,7 +308,7 @@ ps: 模型大小表示为模型的参数量，其中K表示千，M表示百万�
 
 3. 支持自定义模块
 
-4. 增加feature_embedding层来应对不同的输入特征
+4. 增加feature_embedding层来应对不同的输入特征（进展中）
 
 ## 感谢
 
