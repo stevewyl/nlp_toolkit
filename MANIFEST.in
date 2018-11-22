@@ -2,6 +2,6 @@ include README.md
 include requirements.txt
 include requirements-gpu.txt
 include data/dict/radical.txt
-include nlp_toolkit/moudles/*
+include nlp_toolkit/modules/*
 include nlp_toolkit/models/*
 include nlp_toolkit/chunk_segmentor/*
