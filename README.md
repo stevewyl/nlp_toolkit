@@ -113,7 +113,7 @@ cutter.cut(s, pos=False)
 ]
 ```
 
-更多使用细节，请阅读**examples**文件夹中的Jupyter Notebook和chunk_segmentor页面的[README](https://github.com/stevewyl/nlp_toolkit/tree/master/nlp_toolkit/chunk_segmentor)
+更多使用细节，请阅读[**examples**](https://github.com/stevewyl/nlp_toolkit/tree/master/examples)文件夹中的Jupyter Notebook和chunk_segmentor页面的[**README**](https://github.com/stevewyl/nlp_toolkit/tree/master/nlp_toolkit/chunk_segmentor)
 
 ### 数据格式
 
