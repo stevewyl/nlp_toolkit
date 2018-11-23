@@ -12,7 +12,7 @@
 pip install nlp_toolkit
 ```
 
-## 安装
+## 手动安装
 
 ```bash
 git clone https://github.com/stevewyl/nlp_toolkit
