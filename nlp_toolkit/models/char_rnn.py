@@ -15,7 +15,7 @@ class Char_RNN(Base_Model):
     """
 
     def __init__(self, nb_classes, nb_tokens, maxlen,
-                 emebdding_dim=64, use_crf=True,
+                 embedding_dim=64, use_crf=True,
                  use_seg=False, use_radical=False,
                  use_nchar=False,
                  nb_seg_tokens=None, nb_radical_tokens=None,
@@ -25,7 +25,7 @@ class Char_RNN(Base_Model):
         self.nb_classes = nb_classes
         self.nb_tokens = nb_tokens
         self.maxlen = maxlen
-        self.embedding_dim = emebdding_dim
+        self.embedding_dim = embedding_dim
         self.use_crf = use_crf
         self.use_seg = use_seg
         self.use_radical = use_radical

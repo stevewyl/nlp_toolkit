@@ -1,6 +1,12 @@
 # Chunk分词器使用指南
 
-环境依赖：python 3.6 (暂时只支持python3)
+环境依赖：python 3.6.5 (暂时只支持python3)
+
+## 安装
+
+```bash
+pip install nlp_toolkit
+```
 
 ## 主要功能
 
@@ -45,7 +51,7 @@ cutter.cut(s, cut_all=True)
 ]
 ```
 
-## 后续更新
+## Step 3 后续更新
 
 若存在新的模型和字典数据，会提示你是否需要更新
 

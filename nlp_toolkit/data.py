@@ -204,7 +204,7 @@ class Dataset(object):
                 if self.basic_token == 'word':
                     x = self.texts
                 elif self.basic_token == 'char':
-                    x = [word2char(t, None, self.task_type, self.use_seg,
+                    x = [word2char(t.split(), None, self.task_type, self.use_seg,
                                    self.use_radical, self.radical_dict) for t in self.texts]
                     x = {k: [dic[k] for dic in x] for k in x[0]}
 

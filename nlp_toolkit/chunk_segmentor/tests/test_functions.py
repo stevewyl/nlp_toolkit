@@ -58,5 +58,8 @@ cutter = Chunk_Segmentor(mode='fast', verbose=VERBOSE)
 print(list(cutter.cut(text)))
 print('test cut_all')
 print(list(cutter.cut(text, cut_all=True)))
+start = time.time()
+result = list(cutter.cut(text_list))
+print('cut 10000 sentences in fast mode used {:04.2f}s'.format(time.time() - start))
 
 print('test all pass')

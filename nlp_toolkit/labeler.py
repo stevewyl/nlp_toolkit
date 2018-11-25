@@ -5,6 +5,7 @@ Sequence Labeler Wrapper
 import sys
 import time
 import numpy as np
+from copy import deepcopy
 from nlp_toolkit.models import Word_RNN, IDCNN, Char_RNN
 from nlp_toolkit.trainer import Trainer
 from nlp_toolkit.utilities import logger
@@ -71,7 +72,7 @@ class Labeler(object):
                 nb_seg_tokens=self.config['nb_seg_tokens'],
                 nb_radical_tokens=self.config['nb_radical_tokens'],
                 maxlen=self.config['maxlen'],
-                emebdding_dim=self.config['embedding_dim'],
+                embedding_dim=self.config['embedding_dim'],
                 use_seg=self.config['use_seg'],
                 use_radical=self.config['use_radical'],
                 use_crf=self.m_cfg['use_crf'],
@@ -124,25 +125,30 @@ class Labeler(object):
         return self.model_trainer.train(
             x, y, self.transformer, self.seq_type)
 
+    def feature_concat(self, x, features):
+        x_ori = deepcopy(x)
+        x = np.expand_dims(x['token'], axis=-1)
+        for name in features:
+            feature = np.expand_dims(x_ori[name], axis=-1)
+            x = np.concatenate((x, feature), axis=-1)
+        return x
+
     def predict(self, x, batch_size=64):
         use_inner_char = self.transformer.use_inner_char
         use_seg = self.transformer.use_seg
         use_radical = self.transformer.use_radical
         extra_features = []
         if use_inner_char or use_seg or use_radical:
-            x_word = x['token']
-            x_word = np.expand_dims(x_word, axis=-1)
             if use_inner_char:
                 concat = True
-                x = np.concatenate((x_word, x['inner_char']), axis=-1)
+                x = np.concatenate((np.expand_dims(x['token'], axis=-1), x['inner_char']), axis=-1)
             else:
                 concat = False
                 if use_seg:
-                    x = np.concatenate((x_word, x['seg']), axis=-1)
                     extra_features.append('seg')
                 if use_radical:
-                    x = np.concatenate((x_word, x['radical']), axis=-1)
                     extra_features.append('radical')
+                x = self.feature_concat(x, extra_features)
         else:
             concat = False
             x = x['token']
@@ -157,6 +163,13 @@ class Labeler(object):
         logger.info('predict {} samples used {:4.1f}s'.format(
             len(x), used_time))
         return y_pred
+
+    def show_results(self, x, y_pred):
+        x_len = x['length']
+        y_pred_true = [y_pred[i][:x_len[i]] for i in range(len(x_len))]
+        x_true = [x['token'][i][:x_len[i]] for i in range(len(x_len))]
+        x_true = [[self.transformer._token_vocab.id_to_token(idx) for idx in seq] for seq in x_true]
+        return [[(x1, y1) for x1, y1 in zip(x, y)] for x, y in zip(x_true, y_pred_true)]
 
     def evaluate(self, x, y):
         pass
