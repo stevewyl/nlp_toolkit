@@ -12,7 +12,7 @@ pip install nlp_toolkit
 
 1. 能够输出名词短语
 2. 支持词性输出，名词短语词性为np
-3. 支持名词短语以限定词+中心词的形式输出
+3. 支持名词短语以限定词+中心词的形式输出(以“_”分隔)
 
 >不可分割的名词短语是不存在限定词+中心词的形式的，如“机器学习”，而“经典机器学习算法”可拆解为“经典_机器学习_算法”
 
@@ -31,13 +31,12 @@ res = [item for item in cutter.cut([s] * 10000)] # 1080ti上耗时8s
 cutter = Chunk_Segmentor(mode='accurate')
 cutter = Chunk_Segmentor(mode='fast')
 # 支持用户自定义字典
-# 格式为每行 词 [词性]，必须为utf8编码
+# 格式为每行 “词 词性”，必须为utf8编码，词性可省略
 cutter = Chunk_Segmentor(user_dict='your_dict.txt')
-# 限定词+中心词的形式, 默认开启
-cutter.cut(s, qualifier=False)
 # 是否输出词性， 默认开启
 cutter.cut(s, pos=False)
 # 是否需要更细粒度的切分结果， 默认关闭
+# 开启后会将部分名词短语以限定词+中心词的形式切开，词性均为np
 cutter.cut(s, cut_all=True)
 
 # 输出格式（词列表，词性列表，名词短语集合）
