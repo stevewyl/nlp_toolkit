@@ -60,6 +60,10 @@ def check_version():
                         print('拉取md5文件失败！')
                 else:
                     pass
+            else:
+                with open(UPDATE_INIT_PATH, 'w') as fout:
+                    fout.write(init_update_time)
+                print('请再加载一次')
         except Exception:
             print('代码文件缺失')
             sys.exit()
