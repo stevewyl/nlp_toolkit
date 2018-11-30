@@ -6,6 +6,9 @@
 
 ```bash
 pip install nlp_toolkit
+
+# 如果keras_contrib安装失败
+pip install git+https://www.github.com/keras-team/keras-contrib.git
 ```
 
 ## 主要功能
