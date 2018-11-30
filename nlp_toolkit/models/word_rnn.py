@@ -76,12 +76,12 @@ class Word_RNN(Base_Model):
         self.char_lstm = LSTM(char_rnn_size, return_sequences=False)
         self.char_gru = GRU(char_rnn_size, return_sequences=False)
         self.conv = Conv1D(
-            kernel_size=conv_kernel_size, filters=nb_filters, padding='same')
+            kernel_size=conv_kernel_size, filters=self.nb_filters, padding='same')
         self.fc_tanh = Dense(
             embedding_dim, kernel_initializer="glorot_uniform", activation='tanh')
         self.fc_sigmoid = Dense(embedding_dim, activation='sigmoid')
 
-        self.invalid_params = {'char_lstm', 'char_gru',
+        self.invalid_params = {'char_lstm', 'char_gru', 'mask_zero',
                                'conv', 'fc_tanh', 'fc_sigmoid'}
 
     def forward(self):

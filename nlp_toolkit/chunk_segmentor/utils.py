@@ -134,7 +134,7 @@ def split_sublist(list1, list2):
 
 def output_reform(a, b, mode):
     if mode == 'accurate':
-        return a + '_' + 'b'
+        return a + '_' + b
     else:
         return (a, b)
 
@@ -193,20 +193,22 @@ HTML = re.compile(r'('+'|'.join(REGEX_STR)+')', re.UNICODE)
 
 # 异常字符过滤
 def preprocess(string):
-    invalid_unicode = u'[\u25A0-\u25FF\u0080-\u00A0\uE000-\uFBFF\u2000-\u2027\u2030-\u206F\u3000]+'
+    invalid_unicode = u'[\u25A0-\u25FF\u0080-\u00A0\uE000-\uFBFF\u2000-\u2027\u2030-\u206F]+'
     lang_char = u'[\u3040-\u309f\u30A0-\u30FF\u1100-\u11FF\u0E00-\u0E7F\u0600-\u06ff\u0750-\u077f\u0400-\u04ff]+'
     invalid_char = u'[\xa0\x7f\x9f]+'
+    string = re.sub(EMOJI_UNICODE, '', string)
+    string = re.sub(HTML, '', string)
     string = re.sub(r'\r|\t|<\w+>|&\w+;?|br\s*|li>', '', string)
     string = re.sub(invalid_char, '', string)
     string = re.sub(r'<U\+2028>|<U\+F09F>|<U\+F06C>|<U\+F0A7>', '', string)
-    string = re.sub(r' +', '<s>', string)
-    string = re.sub(invalid_unicode, '<ss>', string)
-    string = re.sub(lang_char, '<lan>', string)
-    string = re.sub(EMOJI_UNICODE, '', string)
-    string = re.sub(HTML, '', string)
+    string = re.sub(r'[ \u3000]+', 's_', string)
+    string = re.sub(invalid_unicode, 'ss_', string)
+    string = re.sub(lang_char, 'lan_', string)
     # string = re.sub(r'(工作描述|工作职责|岗位职责|任职要求)(:|：)', '', string)
-    string = re.sub(r'[^\u4e00-\u9fa5\u0020-\u007f，。！？；、（）：\n\u2029\u2028a-zA-Z0-9]+', '', string)
-    return HanziConv.toSimplified(strQ2B(string))
+    string = HanziConv.toSimplified(strQ2B(string))
+    string = re.sub(
+        r'[^\u4e00-\u9fa5\u0020-\u007f，。！？；、（）：\n\u2029\u2028a-zA-Z0-9]+', '', string)
+    return string
 
 
 # 分句策略(比直接切开慢3倍)

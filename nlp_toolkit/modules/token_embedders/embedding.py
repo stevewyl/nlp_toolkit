@@ -22,7 +22,7 @@ def Token_Embedding(x, input_dim, output_dim, embed_weights=None,
         embed = TimeDistributed(embed_layer)(x)
     else:
         embed = embed_layer(x)
-# entire embedding channels are dropped out instead of the
+    # entire embedding channels are dropped out instead of the
     # normal Keras embedding dropout, which drops all channels for entire words
     # many of the datasets contain so few words that losing one or more words can alter the emotions completely
     if dropout_rate != 0:

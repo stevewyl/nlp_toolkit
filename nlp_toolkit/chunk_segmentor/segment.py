@@ -76,7 +76,6 @@ class Chunk_Segmentor(object):
             sys.exit()
         self.pos = True
         self.mode = mode
-        self.qualifier = True
         self.verbose = verbose
         self.path = os.path.abspath(os.path.dirname(__file__))
         if model_name != '':
@@ -88,6 +87,8 @@ class Chunk_Segmentor(object):
                 self.model_name = model_name
 
         # jieba初始化
+        base_dict = Path(self.path) / 'data' / 'dict' / 'jieba_base_supplyment.txt'
+        jieba.load_userdict(str(base_dict))
         if mode == 'fast':
             global load_dict
             if not load_dict:
@@ -114,10 +115,6 @@ class Chunk_Segmentor(object):
             qualifier_dict = self.qualifier_word
         else:
             self.qualifier_word = qualifier_dict
-        if self.mode == 'fast' and self.qualifier:
-            self.fast_qualifier = True
-        else:
-            self.fast_qualifier = False
 
         self.basic_token = 'char' if self.model_name[:4] == 'char' else 'word'
 
@@ -152,14 +149,13 @@ class Chunk_Segmentor(object):
             radical_file = os.path.join(self.path, 'data/dict/radical.txt')
             self.tagger = Tagger(self.labeler.model, self.labeler.p,
                                  basic_token=self.basic_token, radical_file=radical_file,
-                                 tree=self.tree, qualifier=self.qualifier_word)
+                                 tree=self.tree, qualifier_dict=self.qualifier_word)
 
     @property
     def get_segmentor_info(self):
         params = {'model_name': self.model_name,
                   'mode': self.mode,
-                  'pos': self.pos,
-                  'qualifier': self.qualifier}
+                  'pos': self.pos}
         return params
 
     def extract_item(self, item):
@@ -194,11 +190,8 @@ class Chunk_Segmentor(object):
             *[[idx, sub] for idx, item in enumerate(data) for sub in sent_split(preprocess(item))])
         cc = list(Counter(idx_list).values())
         end_idx = [sum(cc[:i]) for i in range(len(cc)+1)]
-        if self.fast_qualifier:
-            seg_res = jieba_cut(strings, self.seg,
-                                self.qualifier_word, mode=self.mode)
-        else:
-            seg_res = jieba_cut(strings, self.seg, mode=self.mode)
+        seg_res = jieba_cut(strings, self.seg,
+                            self.qualifier_word, mode=self.mode)
         if self.mode == 'accurate':
             outputs, _ = self.tagger.analyze(seg_res)
         else:
@@ -208,7 +201,7 @@ class Chunk_Segmentor(object):
         for item in new_res:
             yield self.extract_item(item)
 
-    def cut(self, data, batch_size=512, pos=True, qualifier=True, cut_all=False):
+    def cut(self, data, batch_size=512, pos=True, cut_all=False):
         if isinstance(data, str):
             data = [data]
         if not pos:
@@ -219,12 +212,6 @@ class Chunk_Segmentor(object):
             self.cut_all = False
         else:
             self.cut_all = True
-        if not qualifier:
-            self.qualifier = False
-        else:
-            self.qualifier = True
-        if self.mode == 'all':
-            self.qualifier = True
         self.define_tagger()
         assert isinstance(data, list)
         data_cnt = len(data)

@@ -37,14 +37,21 @@ class Dataset(object):
     Then transform text and label to number index according to the given task
 
     Data Foramt by line:
-        classification: text\tlabel
+        classification: __label__<class_name_1> __label__<class_name_2> ... <text>
         sequence labeling: token_1###label_1\ttoken_2###label_2\t... \ttoken_n###label_n
         language model: token_1 token_2 ... token_n
     """
 
     def __init__(self, mode, fname='', tran_fname='',
                  config=None, task_type=None, use_radical=False):
+        self.mode = mode
         self.fname = fname
+        self.inner_char = False
+        self.use_seg = False
+        self.use_radical = False
+        self.radical_dict = None
+        self.html_texts = re.compile(r'('+'|'.join(REGEX_STR)+')', re.UNICODE)
+
         if task_type:
             if mode == 'train' and config is None:
                 logger.error('please specify the config file path')
@@ -56,43 +63,44 @@ class Dataset(object):
             except:
                 logger.error('please check your config filename')
                 sys.exit()
-        self.use_seg = False
-        self.use_radical = False
-        self.radical_dict = None
+
         if mode == 'train':
-            self.data_config = config['data']
-            self.basic_token = self.data_config['basic_token']
-            if self.basic_token == 'word':
-                self.max_tokens = self.data_config['max_words']
-                if task_type == 'sequence_labeling' and (self.data_config['use_seg'] or self.data_config['use_radical']):
-                    logger.warning('please set use_seg or use_radical as False if your basic token is word')
-                self.inner_char = self.data_config['inner_char']
-            elif self.basic_token == 'char':
-                self.max_tokens = self.data_config['max_chars']
-                if self.data_config['inner_char']:
-                    logger.warning('please set inner_char as False in config file')
-                self.inner_char = False
-                if self.task_type == 'sequence_labeling':
-                    self.use_seg = self.data_config['use_seg']
-                    self.use_radical = self.data_config['use_radical']
+            if 'data' in config:
+                self.config = config
+                self.data_config = config['data']
+                self.embed_config = config['embed']
+                self.basic_token = self.data_config['basic_token']
+                if self.basic_token == 'word':
+                    self.max_tokens = self.data_config['max_words']
+                    self.inner_char = self.data_config['inner_char']
+                elif self.basic_token == 'char':
+                    self.max_tokens = self.data_config['max_chars']
+                    if self.task_type == 'sequence_labeling':
+                        self.use_seg = self.data_config['use_seg']
+                        self.use_radical = self.data_config['use_radical']
+                        if self.config['train']['metric'] not in ['f1_seq']:
+                            self.config['train']['metric'] = 'f1_seq'
+                            logger.warning('sequence labeling task currently only support f1_seq callback')
+                    elif self.task_type == 'classification':
+                        if self.config['train']['metric'] in ['f1_seq']:
+                            self.config['train']['metric'] = 'f1'
+                            logger.warning('text classification task not support f1_seq callback, changed to f1')
+                else:
+                    logger.error('invalid token type, only support word and char')
+                    sys.exit()
             else:
-                logger.error('invalid token type, only support word and char')
+                logger.error("please pass in the correct config dict")
                 sys.exit()
-            self.embed_config = config['embed']
-            self.config = config
-            if task_type == 'sequence_labeling':
-                if self.config['train']['metric'] not in ['f1_seq']:
-                    logger.error('sequence labeling task only support f1_seq callback')
-                    sys.exit()
-            elif task_type == 'classification':
-                if self.config['train']['metric'] in ['f1_seq']:
-                    logger.error('text classification task not support f1_seq callback')
-                    sys.exit()
+
             self.transformer = IndexTransformer(
-                self.task_type, self.max_tokens, self.data_config['max_inner_chars'],
+                task_type=self.task_type,
+                max_tokens=self.max_tokens,
+                max_inner_chars=self.data_config['max_inner_chars'],
                 use_inner_char=self.inner_char,
-                use_seg=self.use_seg, use_radical=self.use_radical,
+                use_seg=self.use_seg,
+                use_radical=self.use_radical,
                 basic_token=self.basic_token)
+
         elif mode == 'predict':
             if len(tran_fname) > 0:
                 logger.info('transformer loaded')
@@ -102,52 +110,97 @@ class Dataset(object):
                 self.use_radical = self.transformer.use_radical
                 self.inner_char = self.transformer.use_inner_char
             else:
-                logger.error("please input the transformer's filepath")
+                logger.error("please pass in the transformer's filepath")
                 sys.exit()
+
         if self.use_radical:
             radical_file = Path(os.path.dirname(os.path.realpath(__file__))).parent / 'data' / 'dict' / 'radical.txt'
             self.radical_dict = {line.split()[0]: line.split()[1].strip()
                                  for line in open(radical_file, encoding='utf8')}
-        self.mode = mode
+
         if fname:
             self.load_data()
         else:
             self.texts = []
             self.labels = []
-        self.html_texts = re.compile(r'('+'|'.join(REGEX_STR)+')', re.UNICODE)
+
+    def clean(self, line):
+        line = re.sub(r'\[[\u4e00-\u9fa5a-z]{1,4}\]|\[aloha\]|\t', '', line)
+        line = re.sub(EMOJI_UNICODE, '', line)
+        line = re.sub(self.html_texts, '', line)
+        if re.search(r'[\u4300-\u9fa5]+', line):
+            line = HanziConv.toSimplified(line)
+            return re.sub(' {2,}', ' ', line).lower()
+        else:
+            return None
 
     def load_data(self):
         if self.mode == 'train':
             if self.task_type == 'classification':
-                self.texts, self.labels = zip(
-                    *[line.strip().split('\t') for line in open(self.fname, 'r', encoding='utf8')])
+                self.load_tc_data()
             elif self.task_type == 'sequence_labeling':
-                data = (line.strip() for line in open(self.fname, 'r', encoding='utf8'))
-                if self.data_config['format'] == 'basic':
-                    self.texts, self.labels = zip(
-                        *[zip(*[item.rsplit('###', 1) for item in line.split('\t')]) for line in data])
-                elif self.data_config['format'] == 'conll':
-                    self.texts, self.labels = self.process_conll(data)
-                else:
-                    logger.warning('invalid data format for sequence labeling task')
-                    sys.exit()
+                self.load_sl_data()
         elif self.mode == 'predict':
             self.texts = [line.strip() for line in open(self.fname, 'r', encoding='utf8')]
         logger.info('data loaded')
 
-    def add(self, line: Dict[str, str]):
-        if self.mode == 'train':
-            if self.task_type == 'classification':
-                self.texts.append(line['text'].strip())
-                self.labels.append(line['label'])
-            elif self.task_type == 'sequence_labeling':
-                t = line['text'].strip().split()
-                l = line['label'].strip().split()
-                assert len(t) == len(l)
-                self.texts.append(t)
-                self.labels.append(l)
-        elif self.mode == 'predict':
-            self.texts.append(line['text'].strip())
+    def load_tc_data(self, max_tokens_per_doc=-1):
+        """
+        Reads a data file for text classification. The file should contain one document/text per line.
+        The line should have the following format:
+        __label__<class_name> <text>
+        If you have a multi label task, you can have as many labels as you want at the beginning of the line, e.g.,
+        __label__<class_name_1> __label__<class_name_2> <text>
+        """
+        label_prefix = '__label__'
+        self.texts = []
+        self.labels = []
+
+        with open(self.fname, 'r', encoding='utf8') as fin:
+            for line in fin:
+                words = self.clean(line.strip()).split()
+                if self.mode == 'train':
+                    if words:
+                        nb_labels = 0
+                        label_line = []
+                        for word in words:
+                            if word.startswith(label_prefix):
+                                nb_labels += 1
+                                label = word.replace(label_prefix, "")
+                                label_line.append(label)
+                            else:
+                                break
+                        text = words[nb_labels:]
+                        if len(text) > max_tokens_per_doc:
+                            text = text[:max_tokens_per_doc]
+                        self.texts.append(text)
+                        self.labels.append(label_line)
+                elif self.mode == 'predict':
+                    self.texts.append(words)
+
+    def load_sl_data(self):
+        """
+        Reads a data file for text classification. The file should contain one document/text per line.
+        The line should have the following formats:
+        1. conll:
+            word\ttag
+            ...
+            word\ttag
+
+            word\ttag
+            ...
+        2. basic:
+            word###tag\tword###tag\t...word###tag
+        """
+        data = (line.strip() for line in open(self.fname, 'r', encoding='utf8'))
+        if self.data_config['format'] == 'basic':
+            self.texts, self.labels = zip(
+                *[zip(*[item.rsplit('###', 1) for item in line.split('\t')]) for line in data])
+        elif self.data_config['format'] == 'conll':
+            self.texts, self.labels = self.process_conll(data)
+        else:
+            logger.warning('invalid data format for sequence labeling task')
+            sys.exit()
 
     def process_conll(self, data):
         sents, labels = [], []
@@ -163,16 +216,19 @@ class Dataset(object):
                 tokens, tags = [], []
         return sents, labels
 
-    def clean(self, line):
-        line = re.sub(r'\[[\u4e00-\u9fa5a-z]{1,4}\]|\[aloha\]|\t', '', line)
-        line = re.sub(EMOJI_UNICODE, '', line)
-        line = re.sub(self.html_texts, '', line)
-        # line = re.sub('c#{1}', 'c_sharp', line)
-        if re.search(r'[\u4300-\u9fa5]+', line):
-            line = HanziConv.toSimplified(line)
-            return re.sub(' {2,}', ' ', line).lower()
-        else:
-            return None
+    def add(self, line: Dict[str, str]):
+        if self.mode == 'train':
+            if self.task_type == 'classification':
+                self.texts.append(line['text'].strip())
+                self.labels.append(line['label'])
+            elif self.task_type == 'sequence_labeling':
+                t = line['text'].strip().split()
+                l = line['label'].strip().split()
+                assert len(t) == len(l)
+                self.texts.append(t)
+                self.labels.append(l)
+        elif self.mode == 'predict':
+            self.texts.append(line['text'].strip())
 
     # 转折句简单切分
     def adv_split(self, line):
@@ -180,33 +236,30 @@ class Dataset(object):
 
     def transform(self):
         if self.task_type == 'classification':
-            self.texts = [self.clean(line) for line in self.texts]
             if self.mode == 'train':
-                x, y = zip(*[(x1.split(' '), y1.split(' '))
-                             for x1, y1 in zip(self.texts, self.labels) if x1])
-            elif self.mode == 'predict':
-                x = [x1.split(' ') for x1 in self.texts]
+                y = self.labels
             if self.basic_token == 'char':
-                x = [word2char(item, task_type='classification') for item in x]
-            x = {'token': x}
+                x = {'token': [word2char(item, task_type=self.task_type) for item in self.texts]}
+            else:
+                x = {'token': self.texts}
         elif self.task_type == 'sequence_labeling':
             if self.mode == 'train':
-                if self.basic_token == 'word':
-                    x = {'token': self.texts}
-                    y = self.labels
-                elif self.basic_token == 'char':
+                if self.basic_token == 'char':
                     x = [word2char(x1, x2, self.task_type, self.use_seg, self.use_radical,
                                    self.radical_dict) for x1, x2 in zip(self.texts, self.labels)]
                     x = {k: [dic[k] for dic in x] for k in x[0]}
                     y = x['label']
                     del x['label']
+                else:
+                    x = {'token': self.texts}
+                    y = self.labels
             elif self.mode == 'predict':
-                if self.basic_token == 'word':
-                    x = self.texts
-                elif self.basic_token == 'char':
+                if self.basic_token == 'char':
                     x = [word2char(t.split(), None, self.task_type, self.use_seg,
                                    self.use_radical, self.radical_dict) for t in self.texts]
                     x = {k: [dic[k] for dic in x] for k in x[0]}
+                else:
+                    x = {'token': self.texts}
 
         if self.mode == 'train':
             self.config['mode'] = self.mode

@@ -8,7 +8,7 @@ from seqeval.metrics.sequence_labeling import get_entities
 from nlp_toolkit.chunk_segmentor.utils import flatten_gen, tag_by_dict, read_line, compare_idx
 
 global special_tokens
-special_tokens = set(['<s>', '<lan>', '<ss>'])
+special_tokens = set(['s_', 'lan_', 'ss_'])
 
 
 def check_in(check_list, filter_list):
@@ -55,7 +55,7 @@ def split_cn_en(word):
 
 
 def split_word(word):
-    word, pos = word.split('_')
+    word, pos = word.rsplit('_', 1)
     if len(word) == 1 or word in special_tokens or not re.search(r'[^a-z0-9]+', word):
         yield [word, word, pos, 'S']
     else:
@@ -104,7 +104,7 @@ def split_long_sent(word_list, max_length):
     if len(word_list) <= max_length:
         return [word_list]
     num_split = int(len(word_list) / max_length)
-    possible_split = [',', '.', '<s>', '、', '/']
+    possible_split = [',', '.', 's_', '、', '/']
     possible_idx = [idx for idx, item in enumerate(word_list) if item[0] in possible_split]
     split_text = split_sent(possible_idx, num_split, max_length, word_list)
     new_list = [sub_item for item in split_text for sub_item in chunk_list(item, max_length)]
@@ -117,14 +117,15 @@ def get_radical(d, char_list):
 
 class Tagger(object):
     def __init__(self, model, preprocessor, basic_token='word', pos=True,
-                 batch_size=512, radical_file='', tree=None, qualifier=None):
+                 batch_size=512, radical_file='', tree=None,
+                 qualifier_dict=None):
         self.wrong = []
         self.model = model
         self.p = preprocessor
         self.basic_token = basic_token
         self.pos = pos
         self.tree = tree
-        self.qualifier = qualifier
+        self.qualifier_dict = qualifier_dict
         if self.basic_token == 'char':
             if self.p.radical_vocab_size > 2:
                 self.use_radical = True
@@ -167,8 +168,7 @@ class Tagger(object):
                   'batch_size': self.batch_size,
                   'use_seg': self.use_seg,
                   'use_radical': self.use_radical,
-                  'use_inner_char': self.use_inner_char,
-                  'mode': self.mode}
+                  'use_inner_char': self.use_inner_char}
         return params
 
     def data_generator(self, batch_input):
@@ -293,17 +293,13 @@ class Tagger(object):
         else:
             return None
 
-    def get_chunk(self, chunk):
-        if self.qualifier and chunk in self.qualifier:
-            return self.qualifier[chunk]
-        return chunk
-
     def output(self, res):
         words = res['words']
         poss = res['pos']
         dict_idx = tag_by_dict(words, self.tree)
         model_idx = [[item['beginOffset'], item['endOffset']] for item in res['entities']]
         new_idx = sorted(list(compare_idx(dict_idx, model_idx)), key=lambda x: x[1])
+        new_idx = [item for item in new_idx if item[0] != item[1]]
         new_word = []
         new_pos = []
         new_chunk = []
@@ -343,14 +339,10 @@ class Tagger(object):
                 elif tag[j] == 'E-Chunk':
                     try:
                         chunk = chunks[j]
-                        if self.qualifier:
-                            if chunk in self.qualifier:
-                                qualifier_word = self.qualifier[chunk]
-                                new_word.append(qualifier_word)
-                                new_chunk.append(qualifier_word)
-                            else:
-                                new_word.append(chunk)
-                                new_chunk.append(chunk)
+                        if chunk in self.qualifier_dict:
+                            qualifier_word = self.qualifier_dict[chunk]
+                            new_word.append(qualifier_word)
+                            new_chunk.append(qualifier_word)
                         else:
                             new_word.append(chunk)
                             new_chunk.append(chunk)
@@ -359,7 +351,7 @@ class Tagger(object):
                     new_pos.append('np')
         else:
             chunks = {item[1]: ''.join(words[item[0]: item[1]+1]) for item in new_idx}
-            chunk_idx = [i for item in new_idx for i in range(item[0], item[1]+1)]
+            chunk_idx = [i for item in new_idx for i in range(item[0], item[1] + 1)]
             for i, item in enumerate(words):
                 if i not in chunk_idx:
                     new_word.append(item)
@@ -367,14 +359,10 @@ class Tagger(object):
                 else:
                     if i in chunks.keys():
                         chunk = chunks[i]
-                        if self.qualifier:
-                            if chunk in self.qualifier:
-                                qualifier_word = self.qualifier[chunk]
-                                new_word.append(qualifier_word)
-                                new_chunk.append(qualifier_word)
-                            else:
-                                new_word.append(chunk)
-                                new_chunk.append(chunk)
+                        if chunk in self.qualifier_dict:
+                            qualifier_word = self.qualifier_dict[chunk]
+                            new_word.append(qualifier_word)
+                            new_chunk.append(qualifier_word)
                         else:
                             new_word.append(chunk)
                             new_chunk.append(chunk)

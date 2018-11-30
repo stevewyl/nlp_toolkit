@@ -1,14 +1,17 @@
 import os
+import sys
 import glob
 import pickle
 import socket
 from pathlib import Path
 from datetime import datetime
 
-STATIC_ROOT = os.path.dirname(os.path.realpath(__file__))
+INIT_PATH = os.path.realpath(__file__)
+STATIC_ROOT = os.path.dirname(INIT_PATH)
 DATA_PATH = Path(STATIC_ROOT) / 'data'
 MD5_FILE_PATH = DATA_PATH / 'model_data.md5'
 UPDATE_TAG_PATH = DATA_PATH / 'last_update.pkl'
+UPDATE_INIT_PATH = DATA_PATH / 'init_update.txt'
 MD5_HDFS_PATH = '/user/kdd_wangyilei/chunk_segmentor/model_data.md5'
 MODEL_HDFS_PATH = '/user/kdd_wangyilei/chunk_segmentor/model_data.zip'
 USER_NAME = 'yilei.wang'
@@ -31,7 +34,7 @@ def check_version():
                     if flag:
                         pickle.dump(current_time, open(UPDATE_TAG_PATH, 'wb'))
                     else:
-                        print('更新失败！')
+                        print('定期检查模型和字典数据更新失败！')
                 else:
                     print('拉取md5文件失败！')
             else:
@@ -39,12 +42,35 @@ def check_version():
         else:
             current_time = datetime.now()
             pickle.dump(current_time, open(UPDATE_TAG_PATH, 'wb'))
+            print('请再加载一次')
+        try:
+            init_update_time = str(os.path.getctime(INIT_PATH))
+            if UPDATE_INIT_PATH.exists():
+                last_update_time = open(UPDATE_INIT_PATH).read()
+                if init_update_time != last_update_time:
+                    src = get_data_md5()
+                    if src:
+                        flag = update(src)
+                        if flag:
+                            with open(UPDATE_INIT_PATH, 'w') as fout:
+                                fout.write(init_update_time)
+                        else:
+                            print('因代码更新，强制更新模型和字典数据失败！')
+                    else:
+                        print('拉取md5文件失败！')
+                else:
+                    pass
+        except Exception:
+            print('代码文件缺失')
+            sys.exit()
     else:
         print("这是第一次启动Chunk分词器。 请耐心等待片刻至数据和模型下载完成。")
         flag = download()
         if flag:
             current_time = datetime.now()
             pickle.dump(current_time, open(UPDATE_TAG_PATH, 'wb'))
+            with open(UPDATE_INIT_PATH, 'w') as fout:
+                fout.write(init_update_time)
         else:
             print('请寻找一台有hadoop或者能访问ftp://192.168.8.23:21或者ftp://211.148.28.11:21的机器')
 

@@ -25,20 +25,23 @@ class Trainer(object):
     # Arguments:
         1. model: Keras Model object
         2. model_name
-        3. metric: the main metric used to track model performance on epoch end
-        4. batch_size
-        5. max_epoch
-        6. optimizer
-        7. checkpoint_path: the folder path for saving models
-        8. early_stopping
-        9. lrplateau
-        10. tensorboard: whether to open tensorboard to log training process
-        11. train_mode: single turn training or n-fold training
-        12. fold_cnt: the number of folds
-        13. test_size
-        14. shuffle: whether to shuffle data between epochs
-        15. seq_type: basic iterator or bucketiterator
-        16. nb_bucket: the bucket size
+        3. task_type: text classification or sequence labeling
+        4. metric: the main metric used to track model performance on epoch end
+        5. extra_features: besides token features, some useful features will be included
+        6. batch_size: minimum batch size
+        7. max_epoch: maximum epoch numbers
+        8. optimizer: default is Adam
+        9. checkpoint_path: the folder path for saving models
+        9. early_stopping: whether to use early stopping strategy
+        10. lrplateau: whether to use lr lateau strategy
+        11. tensorboard: whether to open tensorboard to log training process
+        12. nb_bucket: the bucket size
+        13. train_mode: single turn training or n-fold training
+        14. fold_cnt: the number of folds
+        15. test_size: default is 0.2
+        16. shuffle: whether to shuffle data between epochs, default is true
+        17. patiences: the maximum epochs to stop training when the metric has not been improved
+        
     # Returns:
         The trained model or average performance of the model
     """

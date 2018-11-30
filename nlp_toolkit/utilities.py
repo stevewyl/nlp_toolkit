@@ -15,7 +15,7 @@ logging.basicConfig(level=logging.INFO,
 logger = logging.getLogger('nlp_toolkit')
 
 global special_tokens
-special_tokens = set(['<s>', '<lan>', '<ss>'])
+special_tokens = set(['s_', 'lan_', 'ss_'])
 
 
 # [1, ['a', 'b], [True, False]] ---> [1, 'a', 'b', True, False]
