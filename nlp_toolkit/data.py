@@ -135,13 +135,13 @@ class Dataset(object):
             return None
 
     def load_data(self):
-        if self.mode == 'train':
-            if self.task_type == 'classification':
-                self.load_tc_data()
-            elif self.task_type == 'sequence_labeling':
+        if self.task_type == 'classification':
+            self.load_tc_data()
+        elif self.task_type == 'sequence_labeling':
+            if self.mode == 'train':
                 self.load_sl_data()
-        elif self.mode == 'predict':
-            self.texts = [line.strip() for line in open(self.fname, 'r', encoding='utf8')]
+            elif self.mode == 'predict':
+                self.texts = [line.strip().split() for line in open(self.fname, 'r', encoding='utf8')]
         logger.info('data loaded')
 
     def load_tc_data(self, max_tokens_per_doc=-1):
