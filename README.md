@@ -137,25 +137,36 @@ cutter.cut(s, cut_all=True)
 
     或者 CONLL的标准格式
 
-    词 [TAB] 标签 \n
-    词 [TAB] 标签 \n
+    词 [TAB] 标签
+    
+    词 [TAB] 标签
+    
     ...
-    词 [TAB] 标签 \n
-    \n
-    词 [TAB] 标签 \n
+    
+    词 [TAB] 标签
+    
+    
+    词 [TAB] 标签
     ...
 
     例如：
-    目前\tO\n
-    公司\tO\n
+    
+    目前\tO
+    
+    公司\tO
+    
     ...
-    \n
-    地理\tB-Chunk\n
-    位置\tE-Chunk\n
-    不\tO\n
-    太\tO\n
-    理想\tO\n
-    \n
+    
+    地理\tB-Chunk
+    
+    位置\tE-Chunk
+    
+    不\tO
+    
+    太\tO
+    
+    理想\tO
+    
 
     标签含义（这里以chunk为例）：
 
