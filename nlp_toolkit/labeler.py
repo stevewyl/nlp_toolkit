@@ -137,11 +137,12 @@ class Labeler(object):
         use_inner_char = self.transformer.use_inner_char
         use_seg = self.transformer.use_seg
         use_radical = self.transformer.use_radical
+        lengths = x['length']
         extra_features = []
         if use_inner_char or use_seg or use_radical:
             if use_inner_char:
                 concat = True
-                x = np.concatenate((np.expand_dims(x['token'], axis=-1), x['inner_char']), axis=-1)
+                x = np.concatenate((np.expand_dims(x['token'], axis=-1), x['char']), axis=-1)
             else:
                 concat = False
                 if use_seg:
@@ -158,7 +159,7 @@ class Labeler(object):
                               extra_features=extra_features,
                               concat=concat)
         result = self.model.model.predict_generator(x_seq)
-        y_pred = self.transformer.inverse_transform(result)
+        y_pred = self.transformer.inverse_transform(result, lengths=lengths)
         used_time = time.time() - start
         logger.info('predict {} samples used {:4.1f}s'.format(
             len(x), used_time))
