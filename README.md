@@ -4,7 +4,7 @@
 
 本仓库复现了一些近几年比较火的nlp论文。所有的代码是基于keras开发的。
 
-不到10行代码，你就可以快速训练一个文本分类模型或序列标注模型，或者可以体验基于名词短语切分的分词器
+不到10行代码，你就可以快速训练一个文本分类模型（暂时不支持多标签任务）或序列标注模型，或者可以体验基于名词短语切分的分词器
 
 ## 直接安装
 
@@ -104,10 +104,10 @@ res = [item for item in cutter.cut([s] * 10000)] # 1080ti上耗时8s
 # 提供两个版本，accurate为精确版，fast为快速版但召回会降低一些，默认精确版
 cutter = Chunk_Segmentor(mode='accurate')
 cutter = Chunk_Segmentor(mode='fast')
-# 限定词+中心词的形式, 默认开启
-cutter.cut(s, qualifier=False)
 # 是否输出词性， 默认开启
 cutter.cut(s, pos=False)
+# 是否将可切分的名词短语切分，默认关闭
+cutter.cut(s, cut_all=True)
 # 输出格式（词列表，词性列表，名词短语集合）
 [
     (
@@ -123,11 +123,11 @@ cutter.cut(s, pos=False)
 
 ### 数据格式
 
-1. 文本分类：每一行预先分好词的文件，每一行的格式如下（暂时不支持多标签任务）：
+1. 文本分类：每一行预先分好词的文件，每一行的格式如下：
 
-    词 [空格] 词 [空格] ... [TAB] 标签 \n
+    __label__标签1 __label__标签2 ... 词 词 ... 词\n
 
-    例如 “公司 目前 地理 位置 不 太 理想 ， 离 城市 中心 较 远点 。\tneg”
+    例如 “__label__neg 公司 目前 地理 位置 不 太 理想 ， 离 城市 中心 较 远点 。”
 
 2. 序列标注：每一行预先分好词的文件，支持两种数据格式，每一行的格式如下：
 
@@ -137,25 +137,36 @@ cutter.cut(s, pos=False)
 
     或者 CONLL的标准格式
 
-    词 [TAB] 标签 \n
-    词 [TAB] 标签 \n
+    词 [TAB] 标签
+    
+    词 [TAB] 标签
+    
     ...
-    词 [TAB] 标签 \n
-    \n
-    词 [TAB] 标签 \n
+    
+    词 [TAB] 标签
+    
+    
+    词 [TAB] 标签
     ...
 
     例如：
-    目前\tO\n
-    公司\tO\n
+    
+    目前\tO
+    
+    公司\tO
+    
     ...
-    \n
-    地理\tB-Chunk\n
-    位置\tE-Chunk\n
-    不\tO\n
-    太\tO\n
-    理想\tO\n
-    \n
+    
+    地理\tB-Chunk
+    
+    位置\tE-Chunk
+    
+    不\tO
+    
+    太\tO
+    
+    理想\tO
+    
 
     标签含义（这里以chunk为例）：
 
