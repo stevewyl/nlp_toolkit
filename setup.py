@@ -5,13 +5,13 @@ with open('requirements.txt') as requirements:
 long_description = open('README.md', encoding='utf-8').read()
 
 REQUIREMENTS = ['seqeval>=0.0.5', 'Keras>=2.2.4',
-                'tensorflow>=1.9.0', 'jieba>=0.39',
+                'tensorflow-gpu>=1.9.0', 'jieba>=0.39',
                 'numpy>=1.14.3', 'scikit-learn>=0.19.1',
                 'hanziconv>=0.3.2']
 
 setup(
     name='nlp_toolkit',
-    version='1.0.8',
+    version='1.0.9',
     description='NLP Toolkit with easy model training and applications',
     long_description=long_description,
     author='yilei.wang',
