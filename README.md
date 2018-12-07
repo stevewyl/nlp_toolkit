@@ -29,11 +29,12 @@ pip install git+https://www.github.com/keras-team/keras-contrib.git
 ```
 
 ### 安装错误
+
 1. ImportError: cannot import name 'normalize_data_format'
 
-```bash
-pip install -U keras
-```
+    ```bash
+    pip install -U keras
+    ```
 
 ## 使用方法
 
@@ -138,35 +139,34 @@ cutter.cut(s, cut_all=True)
     或者 CONLL的标准格式
 
     词 [TAB] 标签
-    
+
     词 [TAB] 标签
-    
+
     ...
-    
+
     词 [TAB] 标签
-    
-    
+
     词 [TAB] 标签
+
     ...
 
     例如：
-    
+
     目前\tO
-    
+
     公司\tO
-    
+
     ...
-    
+
     地理\tB-Chunk
-    
+
     位置\tE-Chunk
-    
+
     不\tO
-    
+
     太\tO
-    
+
     理想\tO
-    
 
     标签含义（这里以chunk为例）：
 
@@ -184,7 +184,7 @@ cutter.cut(s, cut_all=True)
     convert_seq_format(input_file, output_file, 'basic')
     ```
 
-    ps: 具体可查看data文件夹中对应的示例数据
+    ps: 具体可查看data文件夹中对应的[**示例数据**](https://github.com/stevewyl/nlp_toolkit/tree/master/data)
 
 3. 预测：不同任务每一行均为预先分好词的文本序列
 
@@ -193,12 +193,14 @@ cutter.cut(s, cut_all=True)
    ```python
    dataset = Dataset(task_type='classification', mode='train', config=config)
    # classification
-   dataset.add({'text': '我 爱 机器 学习', 'label': 1})
+   dataset.add({'text': '我 爱 机器 学习', 'label': 'pos'})
    # sequence labeling
    dataset.add({'text': '我 爱 机器 学习', 'label': 'O O B-Chunk E-Chunk'})
    ```
 
 ### 配置文件
+
+nlp_toolkit通过配置文件来初始化训练任务
 
 train: 表示训练过程中的参数，包括batch大小，epoch数量，训练模式等
 
@@ -206,9 +208,9 @@ data: 表示数据预处理的参数，包括最大词数和字符数，是否�
 
 embed: 词向量，pre表示是否使用预训练词向量
 
-剩下的模块对应不同的模型超参数
+剩下的模块对应不同的模型的超参数
 
-具体细节可查看配置文件注释
+具体细节可查看仓库根目录下的两个**配置文件**注释
 
 ### 可视化
 
@@ -226,6 +228,15 @@ embed: 词向量，pre表示是否使用预训练词向量
     <span style="background-color: #FFFAFA">有</span> <span style="background-color: #FFB6B6">能力</span> <span style="background-color: #FFFBFB">的</span> <span style="background-color: #FFF8F8">人</span> <span style="background-color: #FFEFEF">就</span> <span style="background-color: #FFE3E3">有</span> <span style="background-color: #FFEFEF">很多</span> <span style="background-color: #FF9191">机会</span>
 
 2. acc/loss 曲线可视化
+
+### 其他
+
+1. 生成词向量小文件
+
+    ```python
+    from nlp_toolkit.utilities import gen_small_embedding
+    gen_small_embedding(vocab_file, embed_file, output_file)
+    ```
 
 ## 模型
 
@@ -296,7 +307,7 @@ embed: 词向量，pre表示是否使用预训练词向量
 
     Model                   | 10-fold_f1   | Model Size   | Time per epoch
     ----------------------- | :------:     | :----------: | :-------------:
-    Bi-LSTM Attention       |              |              | 
+    Bi-LSTM Attention       |              |              |
     Transformer             |              | 7M           | 12s
     TextCNN                 | 96.57        | 10M          | 19s
     DPCNN                   | 93.35        | 9M           | 28s
@@ -310,7 +321,7 @@ embed: 词向量，pre表示是否使用预训练词向量
 
     Model                   | 10-fold_f1   | Model Size   | Time per epoch
     ----------------------- | :------:     | :----------: | :-------------:
-    Baseline(WordRNN)       |              |              | 
+    Baseline(WordRNN)       |              |              |
     WordRNN + InnerChar     |              | 3M           | 165s
     CharRNN(seg+radical)    |              |              |
     IDCNN                   |              | 2.7M         | 43s

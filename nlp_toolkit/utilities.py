@@ -204,6 +204,32 @@ def timer(function):
     return log_time()
 
 
+# generate small embedding files according given vocabs
+def gen_small_embedding(vocab_file, embed_file, output_file):
+    vocab = set([word.strip() for word in open(vocab_file, encoding='utf8')])
+    print('total vocab: ', len(vocab))
+    fin = io.open(embed_file, 'r', encoding='utf-8', newline='\n', errors='ignore')
+    try:
+        n, d = map(int, fin.readline().split())
+    except Exception:
+        print('please make sure the embed file is gensim-formatted')
+
+    def gen():
+        for line in fin:
+            token = line.rstrip().split(' ', 1)[0]
+            if token in vocab:
+                yield line
+
+    result = [line for line in gen()]
+    rate = 1 - len(result) / len(vocab)
+    print('oov rate: {:4.2f}%'.format(rate * 100))
+
+    with open(output_file, 'w', encoding='utf8') as fout:
+        fout.write(str(len(result)) + ' ' + str(d) + '\n')
+        for line in result:
+            fout.write(line)
+
+
 # load embeddings from text file
 def load_vectors(fname, vocab):
     fin = io.open(fname, 'r', encoding='utf-8', newline='\n', errors='ignore')
