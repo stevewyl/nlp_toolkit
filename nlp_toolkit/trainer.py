@@ -16,6 +16,8 @@ from nlp_toolkit.modules.custom_loss import custom_binary_crossentropy, custom_c
 from typing import Dict
 from copy import deepcopy
 
+np.random.seed(1050)
+
 
 class Trainer(object):
     """
