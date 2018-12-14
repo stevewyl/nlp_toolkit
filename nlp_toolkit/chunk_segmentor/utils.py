@@ -132,14 +132,16 @@ def split_sublist(list1, list2):
         return new_list
 
 
-def output_reform(a, b, mode):
+def output_reform(a, b, mode, dict_loaded=False):
     if mode == 'accurate':
-        return a + '_' + b
+        if dict_loaded:
+            a = a.replace('_', '')
+        return a + '-' + b
     else:
         return (a, b)
 
 
-def reshape_term(term, qualifier_word=None, mode='accurate'):
+def reshape_term(term, qualifier_word=None, mode='accurate', dict_loaded=False):
     # pos = str(term.nature)
     # word = term.word
     term = str(term).split('/')
@@ -147,17 +149,17 @@ def reshape_term(term, qualifier_word=None, mode='accurate'):
     word = term[0]
     if pos == 'np':
         if word in qualifier_word:
-            return output_reform(qualifier_word[word], pos, mode)
+            return output_reform(qualifier_word[word], pos, mode, dict_loaded)
         else:
-            return output_reform(word, pos, mode)
+            return output_reform(word, pos, mode, dict_loaded)
     else:
-        return output_reform(word, pos, mode)
+        return output_reform(word, pos, mode, dict_loaded)
 
 
 def hanlp_cut(sent_list, segmentor, qualifier_word=None, mode='accurate'):
     if qualifier_word is None:
         if mode == 'accurate':
-            res = [[term.word + '_' + str(term.nature) for term in segmentor.segment(sub)] for sub in sent_list]
+            res = [[term.word + '-' + str(term.nature) for term in segmentor.segment(sub)] for sub in sent_list]
         else:
             res = [[(term.word, str(term.nature)) for term in segmentor.segment(sub)] for sub in sent_list]
     else:
@@ -165,14 +167,14 @@ def hanlp_cut(sent_list, segmentor, qualifier_word=None, mode='accurate'):
     return res
 
 
-def jieba_cut(sent_list, segmentor, qualifier_word=None, mode='accurate'):
+def jieba_cut(sent_list, segmentor, qualifier_word=None, mode='accurate', dict_loaded=False):
     if qualifier_word is None:
         if mode == 'accurate':
-            res = [[word + '_' + flag for word, flag in segmentor.cut(sub)] for sub in sent_list]
+            res = [[word + '-' + flag for word, flag in segmentor.cut(sub)] for sub in sent_list]
         else:
             res = [[(word, flag) for word, flag in segmentor.cut(sub)] for sub in sent_list]
     else:
-        res = [[reshape_term(term, qualifier_word, mode) for term in segmentor.cut(sub)] for sub in sent_list]
+        res = [[reshape_term(term, qualifier_word, mode, dict_loaded) for term in segmentor.cut(sub)] for sub in sent_list]
     return res
 
 

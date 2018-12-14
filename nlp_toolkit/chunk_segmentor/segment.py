@@ -92,6 +92,8 @@ class Chunk_Segmentor(object):
         if mode == 'fast':
             global load_dict
             if not load_dict:
+                if self.verbose:
+                    print('loading np dict to jieba cache')
                 dict_path = Path(self.path) / 'data' / 'dict' / 'chunk_pos.txt'
                 jieba.load_userdict(str(dict_path))
                 load_dict = True
@@ -162,8 +164,9 @@ class Chunk_Segmentor(object):
         C_CUT_WORD, C_CUT_POS, C_CUT_CHUNK = 0, 1, 2
         complete_words = [sub[C_CUT_WORD] for sub in item]
         complete_poss = [sub[C_CUT_POS] for sub in item]
-        if self.mode == 'fast':
-            all_chunks = [x for sub in item for x, y in zip(sub[C_CUT_WORD], sub[C_CUT_POS]) if y == 'np']
+        if load_dict:
+            all_chunks = [x for sub in item for x, y in zip(
+                sub[C_CUT_WORD], sub[C_CUT_POS]) if y == 'np']
         else:
             all_chunks = list(flatten_gen([sub[C_CUT_CHUNK] for sub in item]))
         words = list(flatten_gen(complete_words))
@@ -176,6 +179,8 @@ class Chunk_Segmentor(object):
                  list(dict.fromkeys(all_chunks)))   # C_CUT_CHUNK
         else:
             d = (words, list(dict.fromkeys(all_chunks)))
+        if self.verbose:
+            print(d)
         return d
 
     def cut_qualifier(self, x, y):
@@ -191,11 +196,16 @@ class Chunk_Segmentor(object):
         cc = list(Counter(idx_list).values())
         end_idx = [sum(cc[:i]) for i in range(len(cc)+1)]
         seg_res = jieba_cut(strings, self.seg,
-                            self.qualifier_word, mode=self.mode)
+                            self.qualifier_word, mode=self.mode,
+                            dict_loaded=load_dict)
+        if self.verbose:
+            print(seg_res)
         if self.mode == 'accurate':
             outputs, _ = self.tagger.analyze(seg_res)
         else:
             outputs = [list(zip(*item)) for item in seg_res]
+        if self.verbose:
+            print(outputs)
         new_res = (outputs[end_idx[i]: end_idx[i+1]]
                    for i in range(len(end_idx)-1))
         for item in new_res:
@@ -227,5 +237,5 @@ class Chunk_Segmentor(object):
 
 
 if __name__ == "__main__":
-    cutter = Chunk_Segmentor()
+    cutter = Chunk_Segmentor(verbose=1)
     cutter.cut('这是一个能够输出名词短语的分词器，欢迎试用！')

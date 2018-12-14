@@ -58,7 +58,7 @@ def split_cn_en(word):
 
 
 def split_word(word):
-    word, pos = word.rsplit('_', 1)
+    word, pos = word.rsplit('-', 1)
     if len(word) == 1 or word in special_tokens or not re.search(r'[^a-z0-9]+', word):
         yield [word, word, pos, 'S']
     else:
@@ -220,7 +220,7 @@ class Tagger(object):
             if self.use_radical:
                 input_data['radical'] = [get_radical(self.radical_dict, item) for item in input_data['token']]
         else:
-            string_w = split_long_sent([item.split('_')
+            string_w = split_long_sent([item.split('-')
                                         for item in seg_res], self.p.max_tokens)
             input_data['token'] = [[each[0] for each in item] for item in string_w]
             input_data['pos'] = [[each[1] for each in item] for item in string_w]
