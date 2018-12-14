@@ -32,7 +32,7 @@ setup(
         'Programming Language :: Python :: 3.6',
         'License :: OSI Approved :: MIT License',
         'Topic :: Scientific/Engineering :: Artificial Intelligence',
-    ]
+    ],
     scripts=[
         'bin/run_classifier', 'bin/run_seq_tagger'
     ],
