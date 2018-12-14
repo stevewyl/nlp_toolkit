@@ -11,7 +11,7 @@ from nlp_toolkit.trainer import Trainer
 from nlp_toolkit.utilities import logger
 from nlp_toolkit.sequence import BasicIterator
 from nlp_toolkit.data import Dataset
-from typing import List
+from typing import List, Dict
 
 
 class Labeler(object):

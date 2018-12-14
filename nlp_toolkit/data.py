@@ -128,7 +128,7 @@ class Dataset(object):
         else:
             self.texts = []
             self.labels = []
-        
+
         self.fit()
 
     def clean(self, line):

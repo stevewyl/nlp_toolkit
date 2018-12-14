@@ -11,7 +11,7 @@ REQUIREMENTS = ['seqeval>=0.0.5', 'Keras>=2.2.4',
 
 setup(
     name='nlp_toolkit',
-    version='1.2.1',
+    version='1.2.2',
     description='NLP Toolkit with easy model training and applications',
     long_description=long_description,
     author='yilei.wang',
