@@ -1,7 +1,6 @@
 include README.md
 include requirements.txt
 include requirements-gpu.txt
-include nlp_toolkit/bin/*
 include nlp_toolkit/data/*
 include nlp_toolkit/modules/*
 include nlp_toolkit/models/*

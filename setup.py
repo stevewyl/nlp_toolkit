@@ -11,7 +11,7 @@ REQUIREMENTS = ['seqeval>=0.0.5', 'Keras>=2.2.4',
 
 setup(
     name='nlp_toolkit',
-    version='1.2.7',
+    version='1.2.8',
     description='NLP Toolkit with easy model training and applications',
     long_description=long_description,
     long_description_content_type='text/markdown',
@@ -32,9 +32,6 @@ setup(
         'Programming Language :: Python :: 3.6',
         'License :: OSI Approved :: MIT License',
         'Topic :: Scientific/Engineering :: Artificial Intelligence',
-    ],
-    scripts=[
-        'bin/run_classifier', 'bin/run_seq_tagger'
     ],
     keywords='nlp keras text classification sequence labeling',
 )
