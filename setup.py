@@ -11,7 +11,7 @@ REQUIREMENTS = ['seqeval>=0.0.5', 'Keras>=2.2.4',
 
 setup(
     name='nlp_toolkit',
-    version='1.2.0',
+    version='1.2.1',
     description='NLP Toolkit with easy model training and applications',
     long_description=long_description,
     author='yilei.wang',
@@ -20,7 +20,7 @@ setup(
     install_requires=REQUIREMENTS,
     python_requires='>=3.6',
     packages=find_packages(),
-    data_files=[('data', ['dict/radical.txt'])],
+    package_data={'nlp_toolkit': ['data/dict/radical.txt']},
     include_package_data=True,
     url='https://github.com/stevewyl/nlp_toolkit',
     classifiers=[
