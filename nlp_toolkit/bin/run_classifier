@@ -1,0 +1,18 @@
+import argparse
+import sys
+
+from nlp_toolkit.data import Dataset
+from nlp_toolkit.classifier import Classifier
+
+def get_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-model_dir', type=str, required=True,
+                         help='directory of a pretrained BERT model')
+
+def main(args):
+    pass
+
+
+if __name__ == '__main__':
+    args = get_args()
+    main(args)

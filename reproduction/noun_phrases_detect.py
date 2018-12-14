@@ -2,7 +2,7 @@ from nlp_toolkit.data import Dataset
 from nlp_toolkit.labeler import Labeler
 import yaml
 
-data_path = '../data/cv_word.txt'
+data_path = '../sample_data/cv_word.txt'
 config_path = '../config_sequence_labeling.yaml'
 
 # 建议使用safe_load()

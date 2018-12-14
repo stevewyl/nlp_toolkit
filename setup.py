@@ -11,22 +11,30 @@ REQUIREMENTS = ['seqeval>=0.0.5', 'Keras>=2.2.4',
 
 setup(
     name='nlp_toolkit',
-    version='1.2.5',
+    version='1.2.6',
     description='NLP Toolkit with easy model training and applications',
     long_description=long_description,
+    long_description_content_type='text/markdown',
     author='yilei.wang',
     author_email='stevewyl@163.com',
     license='MIT',
     install_requires=REQUIREMENTS,
+    extra_requires={
+        'tensorflow_gpu': ['tensorflow-gpu>=1.10.0'],
+        'GPUtil': ['GPUtil>=1.3.0'],
+    },
     python_requires='>=3.6',
-    packages=['nlp_toolkit'],
+    packages=find_packages(),
     package_data={'nlp_toolkit': ['data/*.txt']},
     include_package_data=True,
     url='https://github.com/stevewyl/nlp_toolkit',
     classifiers=[
-        'Programming Language :: Python',
         'Programming Language :: Python :: 3.6',
-        'Programming Language :: Python :: Implementation :: CPython',
-        'Programming Language :: Python :: Implementation :: PyPy'
+        'License :: OSI Approved :: MIT License',
+        'Topic :: Scientific/Engineering :: Artificial Intelligence',
     ]
+    scripts=[
+        'bin/run_classifier', 'bin/run_seq_tagger'
+    ],
+    keywords='nlp keras text classification sequence labeling',
 )

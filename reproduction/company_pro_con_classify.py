@@ -2,7 +2,7 @@ from nlp_toolkit.data import Dataset
 from nlp_toolkit.classifier import Classifier
 import yaml
 
-data_path = '../data/company_pro_con.txt'
+data_path = '../sample_data/company_pro_con.txt'
 config_path = '../config_classification.yaml'
 
 # 建议使用safe_load()
