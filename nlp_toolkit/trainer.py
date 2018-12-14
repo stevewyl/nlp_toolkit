@@ -43,7 +43,7 @@ class Trainer(object):
         15. test_size: default is 0.2
         16. shuffle: whether to shuffle data between epochs, default is true
         17. patiences: the maximum epochs to stop training when the metric has not been improved
-        
+
     # Returns:
         The trained model or average performance of the model
     """
@@ -52,7 +52,6 @@ class Trainer(object):
                  model_name,
                  task_type,
                  metric,
-                 extra_features=[],
                  batch_size=64,
                  max_epoch=25,
                  optimizer=Adam(),
@@ -70,7 +69,6 @@ class Trainer(object):
         self.model_name = model_name
         self.task_type = task_type
         self.metric = metric
-        self.extra_features = extra_features
         self.batch_size = batch_size
         self.max_epoch = max_epoch
         self.optimizer = optimizer
@@ -93,40 +91,29 @@ class Trainer(object):
         if seq_type == 'bucket':
             logger.info('use bucket sequence to speed up model training')
             train_batches = BucketIterator(
-                self.task_type, self.nb_bucket, self.batch_size,
-                x_len_train, x_train, y_train, self.extra_features, concat=self.concat)
+                self.task_type, self.transformer, x_len_train,
+                x_train, y_train, self.nb_bucket, self.batch_size)
             valid_batches = BucketIterator(
-                self.task_type, self.nb_bucket, self.batch_size,
-                x_len_valid, x_valid, y_valid, self.extra_features, concat=self.concat)
+                self.task_type, self.transformer, x_len_valid,
+                x_valid, y_valid, self.nb_bucket, self.batch_size)
         elif seq_type == 'basic':
             train_batches = BasicIterator(
-                x_train, y_train, self.batch_size, self.extra_features, concat=self.concat)
+                self.task_type, self.transformer,
+                x_train, y_train, self.batch_size)
             valid_batches = BasicIterator(
-                x_valid, y_valid, self.batch_size, self.extra_features, concat=self.concat)
+                self.task_type, self.transformer,
+                x_valid, y_valid, self.batch_size)
         else:
             logger.warning('invalid data iterator type, only supports "basic" or "bucket"')
         return train_batches, valid_batches
 
     def train(self, x, y, transformer,
               seq_type='bucket',
-              return_attention=False, use_crf=False):
-        assert isinstance(x, dict)
-        x_len = np.array(x['length'])
-        if 'char' in x.keys() or self.extra_features:
-            x_token = x['token']
-            x_token = np.expand_dims(x_token, axis=-1)
-            if 'char' in x.keys():
-                self.concat = True
-                x_char = x['char']
-                x = np.concatenate((x_token, x_char), axis=-1)
-            elif self.extra_features:
-                self.concat = False
-                x_eatra_features = [np.expand_dims(x[name], axis=-1)
-                                    for name in self.extra_features]
-                x = np.concatenate([x_token] + x_eatra_features, axis=-1)
-        else:
-            self.concat = False
-            x = x['token']
+              return_attention=False):
+        self.transformer = transformer
+        x_len = [item[-1] for item in x['token']]
+        x['token'] = [item[:-1] for item in x['token']]
+        self.feature_keys = list(x.keys())
 
         if self.train_mode == 'single':
             # model initialization
@@ -135,13 +122,15 @@ class Trainer(object):
             self.model.model.summary()
 
             # split dataset
-            indices = np.random.permutation(x.shape[0])
-            cut_point = int(x.shape[0] * (1 - self.test_size))
+            indices = np.random.permutation(len(x['token']))
+            cut_point = int(len(x['token']) * (1 - self.test_size))
             train_idx, valid_idx = indices[:cut_point], indices[cut_point:]
-            x_train, x_valid = x[train_idx, :], x[valid_idx, :]
-            y_train, y_valid = y[train_idx, :], y[valid_idx, :]
-            x_len_train, x_len_valid = x_len[train_idx], x_len[valid_idx]
-            logger.info('train/valid set: {}/{}'.format(x_train.shape[0], x_valid.shape[0]))
+            x_train = {k: [x[k][i] for i in train_idx] for k in self.feature_keys}
+            x_valid = {k: [x[k][i] for i in valid_idx] for k in self.feature_keys}
+            y_train, y_valid = [y[i] for i in train_idx], [y[i] for i in valid_idx]
+            x_len_train, x_len_valid = [x_len[i] for i in train_idx], [x_len[i] for i in valid_idx]
+            logger.info(
+                'train/valid set: {}/{}'.format(train_idx.shape[0], valid_idx.shape[0]))
 
             # transform data to sequence data streamer
             train_batches, valid_batches = self.data_generator(
@@ -204,11 +193,10 @@ class Trainer(object):
                     logger.info('%s model structure...' % self.model_name)
                     model_init.model.summary()
 
-                x_train = np.concatenate([x[:fold_start], x[fold_end:]])
-                x_len_train = np.concatenate(
-                    [x_len[:fold_start], x_len[fold_end:]])
-                y_train = np.concatenate([y[:fold_start], y[fold_end:]])
-                x_valid = x[fold_start:fold_end]
+                x_train = {k: x[k][:fold_start] + x[k][fold_end:] for k in self.feature_keys}
+                x_len_train = x_len[:fold_start] + x_len[fold_end:]
+                y_train = y[:fold_start] + y[fold_end:]
+                x_valid = {k: x[k][fold_start:fold_end] for k in self.feature_keys}
                 x_len_valid = x_len[fold_start:fold_end]
                 y_valid = y[fold_start:fold_end]
                 train_batches, valid_batches = self.data_generator(

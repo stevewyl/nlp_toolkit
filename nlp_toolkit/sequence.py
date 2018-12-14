@@ -11,8 +11,9 @@ from keras.utils.np_utils import to_categorical
 from keras.preprocessing.sequence import pad_sequences
 from sklearn.externals import joblib
 from sklearn.base import BaseEstimator, TransformerMixin
-from nlp_toolkit.utilities import timer, logger
+from nlp_toolkit.utilities import logger, word2char
 from typing import Dict, List
+from collections import defaultdict
 
 
 def top_elements(array, k):
@@ -131,7 +132,7 @@ class IndexTransformer(BaseEstimator, TransformerMixin):
 
     def __init__(self, task_type, max_tokens=80, max_inner_chars=8, lower=True,
                  use_inner_char=False, initial_vocab=None,
-                 use_seg=False, use_radical=False, basic_token='word'):
+                 use_seg=False, use_radical=False, radical_dict=None, basic_token='word'):
         self.basic_token = basic_token
         self.task_type = task_type
         self.max_tokens = max_tokens
@@ -150,58 +151,64 @@ class IndexTransformer(BaseEstimator, TransformerMixin):
             self._seg_vocab = Vocabulary(lower=False)
         if use_radical:
             self._radical_vocab = Vocabulary(lower=False)
+            self.radical_dict = radical_dict
 
     def fit(self, X, y=None):
-        assert isinstance(X, dict)
-        self._token_vocab.add_documents(X['token'])
+        # assert isinstance(X, dict)
+        self._token_vocab.add_documents(X)
         self._token_vocab.build()
         if y is not None:
             self._label_vocab.add_documents(y)
             self._label_vocab.build()
         if self.use_inner_char:
-            for doc in X['token']:
+            for doc in X:
                 self._inner_char_vocab.add_documents(doc)
             self._inner_char_vocab.build()
         if self.use_seg:
-            self._seg_vocab.add_documents(X['seg'])
+            self._seg_vocab.add_documents([['B'], ['E'], ['M'], ['S']])
             self._seg_vocab.build()
         if self.use_radical:
-            self._radical_vocab.add_documents(X['radical'])
+            self._radical_vocab.add_documents([[w] for w in self.radical_dict])
             self._radical_vocab.build()
 
         return self
 
-    def transform(self, X, y=None):
+    def transform(self, X, y=None, max_len=None):
+        if max_len is not None:
+            max_tokens = max_len
+        else:
+            max_tokens = self.max_tokens
         tokens = X['token']
         token_ids = [self._token_vocab.doc2id(doc) for doc in tokens]
-        lengths = (len(line) for line in token_ids)
-        lengths = [self.max_tokens if l > self.max_tokens else l for l in lengths]
+        # lengths = (len(line) for line in token_ids)
+        # lengths = [self.max_tokens if l > self.max_tokens else l for l in lengths]
         token_ids = pad_sequences(
-            token_ids, maxlen=self.max_tokens, padding='post')
-        features = {'token': token_ids, 'length': lengths}
+            token_ids, maxlen=max_tokens, padding='post')
+        # features = {'token': token_ids, 'length': lengths}
+        features = {'token': token_ids}
 
         if self.use_inner_char:
             char_ids = [[self._inner_char_vocab.doc2id(w) for w in doc] for doc in tokens]
             char_ids = pad_nested_sequences(
-                char_ids, self.max_tokens, self.max_inner_chars)
+                char_ids, max_tokens, self.max_inner_chars)
             features['char'] = char_ids
 
         if self.use_seg:
             seg_ids = [self._seg_vocab.doc2id(doc) for doc in X['seg']]
             seg_ids = pad_sequences(
-                seg_ids, maxlen=self.max_tokens, padding='post')
+                seg_ids, maxlen=max_tokens, padding='post')
             features['seg'] = seg_ids
 
         if self.use_radical:
             radical_ids = [self._radical_vocab.doc2id(doc) for doc in X['radical']]
             radical_ids = pad_sequences(
-                radical_ids, maxlen=self.max_tokens, padding='post')
+                radical_ids, maxlen=max_tokens, padding='post')
             features['radical'] = radical_ids
 
         if y is not None:
             y = [self._label_vocab.doc2id(doc) for doc in y]
             if self.task_type == 'sequence_labeling':
-                y = pad_sequences(y, maxlen=self.max_tokens, padding='post')
+                y = pad_sequences(y, maxlen=max_tokens, padding='post')
             y = to_categorical(y, self.label_size).astype(float)
 
             return features, y
@@ -283,36 +290,36 @@ class BasicIterator(Sequence):
     Wrapper for Keras Sequence Class
     """
 
-    def __init__(self, x, y=None, batch_size=1,
-                 extra_features: List[str] = None, concat=False):
+    def __init__(self, task_type: str, transformer: IndexTransformer,
+                 x: Dict[str, List[List[str]]], y: List[List[str]] = None, batch_size=1):
+        self.task_type = task_type
+        self.t = transformer
         self.x = x
         self.y = y
         self.batch_size = batch_size
-        self.concat = concat
-        self.extra_features = extra_features
+        if self.t.use_radical:
+            self.radical_dict = self.t.radical_dict
+        else:
+            self.radical_dict = None
 
     def __getitem__(self, idx):
         idx_begin = self.batch_size * idx
         idx_end = self.batch_size * (idx + 1)
-        x_b = self.x[idx_begin: idx_end]
-        if self.concat:
-            x_word = x_b[:, :, 0]
-            x_char = x_b[:, :, 1:]
-            batch_x = {'token': x_word, 'char': x_char}
-        elif self.extra_features:
-            batch_x = {'token': x_b[:, :, 0]}
-            for k, feature in enumerate(self.extra_features):
-                batch_x[feature] = x_b[:, :, k+1]
-        else:
-            batch_x = {'token': x_b}
+        x_batch = {k: v[idx_begin: idx_end] for k, v in self.x.items()}
         if self.y is not None:
-            batch_y = self.y[idx_begin: idx_end]
-            return batch_x, batch_y
+            y_batch = self.y[idx_begin: idx_end]
         else:
-            return batch_x
+            y_batch = None
+
+        features, labels = self.t.transform(x_batch, y_batch)
+
+        if labels is not None:
+            return features, labels
+        else:
+            return features
 
     def __len__(self):
-        return math.ceil(len(self.x) / self.batch_size)
+        return math.ceil(len(self.x['token']) / self.batch_size)
 
 
 def _roundto(val, batch_size):
@@ -326,59 +333,47 @@ class BucketIterator(Sequence):
     (where post padding is prepended).
     """
 
-    def __init__(self, task_type, num_buckets, batch_size, seq_lengths,
-                 x_seq, y=None, extra_features: List[str] = None, concat=False):
-        cnt_labels = y.shape[-1]
-        self.batch_size = batch_size
-        self.concat = concat
+    def __init__(self, task_type: str, transformer: IndexTransformer,
+                 seq_lengths: List[int],
+                 x: Dict[str, List[List[str]]], y: List[List[str]],
+                 num_buckets: int = 8, batch_size=1):
         self.task_type = task_type
-        self.extra_features = extra_features
-        # Count bucket sizes
-        bucket_sizes, bucket_ranges = np.histogram(seq_lengths,
-                                                   bins=num_buckets)
+        self.t = transformer
+        self.batch_size = batch_size
+        self.task_type = task_type
+        self.x = x
+        self.y = y
+        if self.t.use_radical:
+            self.radical_dict = self.t.radical_dict
+        else:
+            self.radical_dict = None
 
+        # Count bucket sizes
+        bucket_sizes, bucket_ranges = np.histogram(
+            seq_lengths, bins=num_buckets)
         # Looking for non-empty buckets
         actual_buckets = [bucket_ranges[i+1]
                           for i, bs in enumerate(bucket_sizes) if bs > 0]
         actual_bucket_sizes = [bs for bs in bucket_sizes if bs > 0]
-        bucket_seqlen = [int(math.ceil(bs)) for bs in actual_buckets]
+        self.bucket_seqlen = [int(math.ceil(bs)) for bs in actual_buckets]
         num_actual = len(actual_buckets)
         logger.info('Training with %d non-empty buckets' % num_actual)
 
-        if task_type == 'sequence_labeling':
-            if concat or extra_features:
-                self.bins = [(np.ndarray([bs, bsl, x_seq.shape[-1]], dtype=x_seq.dtype),
-                              np.ndarray([bs, bsl, cnt_labels], dtype=y.dtype))
-                             for bsl, bs in zip(bucket_seqlen, actual_bucket_sizes)]
-            else:
-                self.bins = [(np.ndarray([bs, bsl], dtype=x_seq.dtype),
-                              np.ndarray([bs, bsl, cnt_labels], dtype=y.dtype))
-                             for bsl, bs in zip(bucket_seqlen, actual_bucket_sizes)]
-        elif task_type == 'classification':
-            self.bins = [(np.ndarray([bs, bsl], dtype=x_seq.dtype),
-                          np.ndarray([bs, cnt_labels], dtype=y.dtype))
-                         for bsl, bs in zip(bucket_seqlen, actual_bucket_sizes)]
+        self.bins = [(defaultdict(list), []) for bs in actual_bucket_sizes]
         assert len(self.bins) == num_actual
 
         # Insert the sequences into the bins
-        bctr = [0] * num_actual
+        self.feature_keys = list(self.x.keys())
         for i, sl in enumerate(seq_lengths):
             for j in range(num_actual):
-                bsl = bucket_seqlen[j]
+                bsl = self.bucket_seqlen[j]
                 if sl < bsl or j == num_actual - 1:
-                    if self.task_type == 'sequence_labeling':
-                        self.bins[j][1][bctr[j], :bsl, :] = y[i, :bsl, :]
-                        if self.concat or self.extra_features:
-                            self.bins[j][0][bctr[j], :bsl, :] = x_seq[i, :bsl, :]
-                        else:
-                            self.bins[j][0][bctr[j], :bsl] = x_seq[i, :bsl]
-                    elif task_type == 'classification':
-                        self.bins[j][0][bctr[j], :bsl] = x_seq[i, :bsl]
-                        self.bins[j][1][bctr[j], :] = y[i]
-                    bctr[j] += 1
+                    for k in self.feature_keys:
+                        self.bins[j][0][k].append(x[k][i])
+                    self.bins[j][1].append(y[i])
                     break
 
-        self.num_samples = x_seq.shape[0]
+        self.num_samples = len(self.x['token'])
         self.dataset_len = int(sum([math.ceil(bs / self.batch_size)
                                     for bs in actual_bucket_sizes]))
         self._permute()
@@ -389,8 +384,8 @@ class BucketIterator(Sequence):
 
         # Shuffle bin contents
         for i, (xbin, ybin) in enumerate(self.bins):
-            index_array = np.random.permutation(xbin.shape[0])
-            self.bins[i] = (xbin[index_array], ybin[index_array])
+            index_array = np.random.permutation(len(ybin))
+            self.bins[i] = ({k: [xbin[k][i] for i in index_array] for k in self.feature_keys}, [ybin[i] for i in index_array])
 
     def on_epoch_end(self):
         self._permute()
@@ -403,28 +398,20 @@ class BucketIterator(Sequence):
         idx_end = self.batch_size * (idx + 1)
 
         # Obtain bin index
-        for _, (xbin, ybin) in enumerate(self.bins):
-            rounded_bin = _roundto(xbin.shape[0], self.batch_size)
+        for idx, (xbin, ybin) in enumerate(self.bins):
+            rounded_bin = _roundto(len(ybin), self.batch_size)
             if idx_begin >= rounded_bin:
                 idx_begin -= rounded_bin
                 idx_end -= rounded_bin
                 continue
 
             # Found bin
-            idx_end = min(xbin.shape[0], idx_end)  # Clamp to end of bin
-            x_b = xbin[idx_begin:idx_end]
-            if self.concat:
-                x_word = x_b[:, :, 0]
-                x_char = x_b[:, :, 1:]
-                batch_x = {'token': x_word, 'char': x_char}
-            elif self.extra_features:
-                batch_x = {}
-                batch_x['token'] = x_b[:, :, 0]
-                for k, feature in enumerate(self.extra_features):
-                    batch_x[feature] = x_b[:, :, k+1]
-            else:
-                batch_x = {'token': x_b}
-            batch_y = ybin[idx_begin:idx_end]
-            return batch_x, batch_y
+            idx_end = min(len(ybin), idx_end)  # Clamp to end of bin
+            x_batch = {k: v[idx_begin: idx_end] for k, v in xbin.items()}
+            y_batch = ybin[idx_begin: idx_end]
 
+            max_len_i = self.bucket_seqlen[idx]
+            features, labels = self.t.transform(x_batch, y_batch, max_len_i)
+
+            return features, labels
         raise ValueError('out of bounds')

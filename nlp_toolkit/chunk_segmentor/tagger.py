@@ -2,13 +2,16 @@
 
 import re
 import numpy as np
+import tensorflow as tf
 from pathlib import Path
 from collections import Counter
 from seqeval.metrics.sequence_labeling import get_entities
 from nlp_toolkit.chunk_segmentor.utils import flatten_gen, tag_by_dict, read_line, compare_idx
 
 global special_tokens
+global graph
 special_tokens = set(['s_', 'lan_', 'ss_'])
+graph = tf.get_default_graph()
 
 
 def check_in(check_list, filter_list):
@@ -233,7 +236,8 @@ class Tagger(object):
             segs = []
             words = []
         X = self.p.transform(batch_data)
-        Y = self.model.model.predict_on_batch(X)
+        with graph.as_default():
+            Y = self.model.model.predict_on_batch(X)
         return split_text, pos, Y, segs, words
 
     def _get_prob(self, pred):

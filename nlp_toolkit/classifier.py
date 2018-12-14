@@ -10,6 +10,8 @@ from nlp_toolkit.models import textCNN, DPCNN
 from nlp_toolkit.trainer import Trainer
 from nlp_toolkit.utilities import logger
 from nlp_toolkit.sequence import BasicIterator
+from nlp_toolkit.data import Dataset
+from typing import List, Dict
 
 
 # TODO
@@ -25,24 +27,19 @@ class Classifier(object):
     5. HAN (Hierachical Attention Network)
     """
 
-    def __init__(self, model_name, transformer, seq_type='bucket', config=None):
+    def __init__(self, model_name, dataset: Dataset, seq_type='bucket'):
         self.model_name = model_name
-        self.transformer = transformer
-        if config:
-            self.mode = config['mode']
-            self.extra_features = config['extra_features']
-        else:
-            self.mode = 'predict'
-        if self.mode == 'train':
-            assert config is not None
-            self.config = config
+        self.dataset = dataset
+        self.transformer = dataset.transformer
+        self.config = self.dataset.config
+        if self.config['mode'] == 'train':
             self.m_cfg = self.config['model'][self.model_name]
             self.seq_type = seq_type
             if seq_type == 'bucket':
                 self.config['maxlen'] = None
             self.model = self.get_model()
             self.model_trainer = self.get_trainer()
-        elif self.mode == 'predict':
+        elif self.config['mode'] == 'predict':
             pass
         else:
             logger.warning('invalid mode name. Current only support "train" and "predict"')
@@ -119,26 +116,30 @@ class Classifier(object):
             test_size=t_cfg['test_size'],
             metric=t_cfg['metric'],
             nb_bucket=t_cfg['nb_bucket'],
-            patiences=t_cfg['patiences'],
-            extra_features=self.extra_features
+            patiences=t_cfg['patiences']
         )
         return model_trainer
 
-    def train(self, x, y):
+    def train(self):
         if self.model_name == 'bi_lstm_att':
             return_att = self.m_cfg['return_att']
         else:
             return_att = False
         return self.model_trainer.train(
-            x, y, self.transformer, self.seq_type, return_att)
+            self.dataset.texts, self.dataset.labels,
+            self.transformer, self.seq_type, return_att)
 
-    def predict(self, x, batch_size=64, return_attention=False):
-        x = x['token']
+    def predict(self, x: Dict[str, List[List[str]]], batch_size=64,
+                return_attention=False, return_prob=False):
         n_labels = len(self.transformer._label_vocab._id2token)
         start = time.time()
-        x_seq = BasicIterator(x, batch_size=batch_size)
+        x_seq = BasicIterator('classification', self.transformer,
+                              x, batch_size=batch_size)
         result = self.model.model.predict_generator(x_seq)
-        y_pred = self.transformer.inverse_transform(result[:, :n_labels])
+        if return_prob:
+            y_pred = result[:, :n_labels]
+        else:
+            y_pred = self.transformer.inverse_transform(result[:, :n_labels])
         used_time = time.time() - start
         logger.info('predict {} samples used {:4.1f}s'.format(
             len(x), used_time))
@@ -148,7 +149,7 @@ class Classifier(object):
         else:
             return y_pred
 
-    def evaluate(self, x, y):
+    def evaluate(self, x: Dict[str, List[List[str]]], y: List[List[str]]):
         pass
 
     def load(self, weight_fname, para_fname):

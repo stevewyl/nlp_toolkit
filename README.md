@@ -10,6 +10,9 @@
 
 ```bash
 pip install nlp_toolkit
+
+# 使用GPU
+pip install tensorflow-gpu, GPUtil
 ```
 
 ## 手动安装
@@ -78,22 +81,19 @@ config = yaml.load(open('your_config.yaml'))
 
 # 分类任务
 dataset = Dataset(fname='your_data.txt', task_type='classification', mode='train', config=config)
-x, y, new_config = dataset.transform()
-text_classifier = Classifier(config=new_config, model_name='multi_head_self_att', seq_type='bucket', transformer=dataset.transformer)
-trained_model = text_classifier.train(x, y)
+text_classifier = Classifier('multi_head_self_att', dataset)
+trained_model = text_classifier.train()
 
 # 序列标注任务
 dataset = Dataset(fname='your_data.txt', task_type='sequence_labeling', mode='train', config=config)
-x, y, new_config = dataset.transform()
-seq_labeler = Labeler(config=new_config, model_name='word_rnn', seq_type='bucket',transformer=dataset.transformer)
-trained_model = seq_labeler.train(x, y)
+seq_labeler = Labeler('word_rnn', dataset)
+trained_model = seq_labeler.train()
 
 # 预测（以文本分类为例）
 dataset = Dataset(fname='your_data.txt', task_type='classification', mode='predict', tran_fname='your_transformer.h5')
-x_seq = dataset.transform()
-text_classifier = Classifier('bi_lstm_att', dataset.transformer)
+text_classifier = Classifier('bi_lstm_att', dataset)
 text_classifier.load(weight_fname='your_model_weights.h5', para_fname='your_model_parameters.json')
-y_pred = text_classifier.predict(x_seq)
+y_pred = text_classifier.predict(dataset.texts)
 
 # chunk分词
 # 第一次import的时候，会自动下载模型和字典数据
@@ -330,13 +330,11 @@ ps: 模型大小表示为模型的参数量，其中K表示千，M表示百万�
 
 ## To-Do列表
 
-1. 加入更多SOTA的模型
+1. 加入更多SOTA的模型和自定义层
 
-2. 增加语言模型的训练
+2. 下一版本规划：增加抽象类Sentence 
 
-3. 支持自定义模块
-
-4. 增加feature_embedding层来应对不同的输入特征（进展中）
+3. V2.0规划：切换为tf.estimator和tf.keras的API
 
 ## 感谢
 

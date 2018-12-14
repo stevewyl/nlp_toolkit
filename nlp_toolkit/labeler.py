@@ -10,6 +10,8 @@ from nlp_toolkit.models import Word_RNN, IDCNN, Char_RNN
 from nlp_toolkit.trainer import Trainer
 from nlp_toolkit.utilities import logger
 from nlp_toolkit.sequence import BasicIterator
+from nlp_toolkit.data import Dataset
+from typing import List
 
 
 class Labeler(object):
@@ -21,24 +23,19 @@ class Labeler(object):
     3. IDCNN
     """
 
-    def __init__(self, model_name, transformer, seq_type='bucket', config=None):
+    def __init__(self, model_name, dataset: Dataset, seq_type='bucket'):
         self.model_name = model_name
-        self.transformer = transformer
-        if config:
-            self.mode = config['mode']
-            self.extra_features = config['extra_features']
-        else:
-            self.mode = 'predict'
-        if self.mode == 'train':
-            assert config is not None
-            self.config = config
+        self.dataset = dataset
+        self.transformer = dataset.transformer
+        self.config = self.dataset.config
+        if self.config['mode'] == 'train':
             self.m_cfg = self.config['model'][self.model_name]
             self.seq_type = seq_type
             if seq_type == 'bucket':
                 self.config['maxlen'] = None
             self.model = self.get_model()
             self.model_trainer = self.get_trainer()
-        elif self.mode == 'predict':
+        elif self.config['mode'] == 'predict':
             pass
         else:
             logger.warning('invalid mode name. Current only support "train" and "predict"')
@@ -116,14 +113,14 @@ class Labeler(object):
             test_size=t_cfg['test_size'],
             metric=t_cfg['metric'],
             nb_bucket=t_cfg['nb_bucket'],
-            patiences=t_cfg['patiences'],
-            extra_features=self.extra_features
+            patiences=t_cfg['patiences']
         )
         return model_trainer
 
-    def train(self, x, y):
+    def train(self):
         return self.model_trainer.train(
-            x, y, self.transformer, self.seq_type)
+            self.dataset.texts, self.dataset.labels,
+            self.transformer, self.seq_type)
 
     def feature_concat(self, x, features):
         x_ori = deepcopy(x)
@@ -133,33 +130,16 @@ class Labeler(object):
             x = np.concatenate((x, feature), axis=-1)
         return x
 
-    def predict(self, x, batch_size=64):
-        use_inner_char = self.transformer.use_inner_char
-        use_seg = self.transformer.use_seg
-        use_radical = self.transformer.use_radical
-        lengths = x['length']
-        extra_features = []
-        if use_inner_char or use_seg or use_radical:
-            if use_inner_char:
-                concat = True
-                x = np.concatenate((np.expand_dims(x['token'], axis=-1), x['char']), axis=-1)
-            else:
-                concat = False
-                if use_seg:
-                    extra_features.append('seg')
-                if use_radical:
-                    extra_features.append('radical')
-                x = self.feature_concat(x, extra_features)
-        else:
-            concat = False
-            x = x['token']
-
+    def predict(self, x: Dict[str, List[List[str]]], batch_size=64,
+                return_prob=False):
         start = time.time()
-        x_seq = BasicIterator(x, batch_size=batch_size,
-                              extra_features=extra_features,
-                              concat=concat)
+        x_seq = BasicIterator('sequence_labeling', self.transformer,
+                              x, batch_size=batch_size)
         result = self.model.model.predict_generator(x_seq)
-        y_pred = self.transformer.inverse_transform(result, lengths=lengths)
+        if return_prob:
+            y_pred = result
+        else:
+            y_pred = self.transformer.inverse_transform(result, lengths=lengths)
         used_time = time.time() - start
         logger.info('predict {} samples used {:4.1f}s'.format(
             len(x), used_time))
@@ -172,7 +152,7 @@ class Labeler(object):
         x_true = [[self.transformer._token_vocab.id_to_token(idx) for idx in seq] for seq in x_true]
         return [[(x1, y1) for x1, y1 in zip(x, y)] for x, y in zip(x_true, y_pred_true)]
 
-    def evaluate(self, x, y):
+    def evaluate(self, x: Dict[str, List[List[str]]], y: List[List[str]]):
         pass
 
     def load(self, weight_fname, para_fname):

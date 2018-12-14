@@ -128,14 +128,16 @@ def get_radical(d, char_list):
 
 
 def word2char(word_list, label_list=None, task_type='',
-              use_seg=False, use_radical=False, radical_dict=None):
+              use_seg=False, radical_dict=None):
     """
     convert basic token from word to char
+    non-chinese word will not be simply splitted into char sequences
+    e.g. "machine02" will be splitted into "machine" and "02"
     """
 
     if task_type == 'classification':
         assert label_list is None
-        assert use_radical is False
+        assert radical_dict is None
         assert use_seg is False
         return [char for word in word_list for char in list(split_cn_en(word))]
     elif task_type == 'sequence_labeling':
@@ -158,7 +160,7 @@ def word2char(word_list, label_list=None, task_type='',
             new_result = {'token': chars}
         if use_seg:
             new_result['seg'] = seg_tags
-        if use_radical:
+        if radical_dict:
             new_result['radical'] = get_radical(radical_dict, chars)
         return new_result
     else:
@@ -253,7 +255,7 @@ def load_vectors(fname, vocab):
     return embedding_matrix, d
 
 
-def load_tc_data(fname, label_prefix='__label__', max_tokens_per_doc=-1):
+def load_tc_data(fname, label_prefix='__label__', max_tokens_per_doc=256):
 
     def gen():
         with open(fname, 'r', encoding='utf8') as fin:
@@ -281,6 +283,7 @@ def load_tc_data(fname, label_prefix='__label__', max_tokens_per_doc=-1):
 def load_sl_data(fname, data_format='basic'):
 
     def process_conll(data):
+        sents, labels = [], []
         tokens, tags = [], []
         for line in data:
             if line:
@@ -288,8 +291,10 @@ def load_sl_data(fname, data_format='basic'):
                 tokens.append(token)
                 tags.append(tag)
             else:
-                yield (tokens, tags)
+                sents.append(tokens)
+                labels.append(tags)
                 tokens, tags = [], []
+        return sents, labels
 
     data = (line.strip() for line in open(fname, 'r', encoding='utf8'))
     if data_format:
@@ -297,7 +302,7 @@ def load_sl_data(fname, data_format='basic'):
             texts, labels = zip(
                 *[zip(*[item.rsplit('###', 1) for item in line.split('\t')]) for line in data])
         elif data_format == 'conll':
-            texts, labels = zip(*[item for item in process_conll(data)])
+            texts, labels = process_conll(data)
         return texts, labels
     else:
         print('invalid data format for sequence labeling task')

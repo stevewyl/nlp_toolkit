@@ -7,11 +7,11 @@ long_description = open('README.md', encoding='utf-8').read()
 REQUIREMENTS = ['seqeval>=0.0.5', 'Keras>=2.2.4',
                 'tensorflow>=1.9.0', 'jieba>=0.39',
                 'numpy>=1.14.3', 'scikit-learn>=0.19.1',
-                'hanziconv>=0.3.2']
+                'hanziconv>=0.3.2', 'ruamel.yaml>=0.15.81']
 
 setup(
     name='nlp_toolkit',
-    version='1.1.1',
+    version='1.2.0',
     description='NLP Toolkit with easy model training and applications',
     long_description=long_description,
     author='yilei.wang',
@@ -20,6 +20,7 @@ setup(
     install_requires=REQUIREMENTS,
     python_requires='>=3.6',
     packages=find_packages(),
+    data_files=[('data', ['dict/radical.txt'])],
     include_package_data=True,
     url='https://github.com/stevewyl/nlp_toolkit',
     classifiers=[
