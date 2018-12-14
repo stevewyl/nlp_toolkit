@@ -18,7 +18,7 @@ try:
     avail_gpu = GPUtil.getAvailable(order='memory')
     num_avail_gpu = len(avail_gpu)
 
-    gpu_no = str(num_avail_gpu[0])
+    gpu_no = str(avail_gpu[0])
     os.environ['CUDA_VISIBLE_DEVICES'] = gpu_no
     logging.info('Choose the most free GPU: %s, currently not support multi-gpus' % gpu_no)
 

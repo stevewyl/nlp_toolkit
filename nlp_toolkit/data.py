@@ -70,7 +70,7 @@ class Dataset(object):
                 self.use_radical = config['data']['use_radical']
 
         if self.use_radical:
-            radical_file = Path(os.path.dirname(os.path.realpath(__file__))) / 'data' / 'dict' / 'radical.txt'
+            radical_file = Path(os.path.dirname(os.path.realpath(__file__))) / 'data' / 'radical.txt'
             self.radical_dict = {line.split()[0]: line.split()[1].strip()
                                  for line in open(radical_file, encoding='utf8')}
 
