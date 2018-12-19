@@ -184,7 +184,7 @@ cutter.cut(s, cut_all=True)
     convert_seq_format(input_file, output_file, 'basic')
     ```
 
-    ps: 具体可查看data文件夹中对应的[**示例数据**](https://github.com/stevewyl/nlp_toolkit/tree/master/data)
+    ps: 具体可查看data文件夹中对应的[**示例数据**](https://github.com/stevewyl/nlp_toolkit/tree/master/sample_data)
 
 3. 预测：不同任务每一行均为预先分好词的文本序列
 
