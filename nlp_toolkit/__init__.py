@@ -19,6 +19,7 @@ try:
     num_avail_gpu = len(avail_gpu)
 
     gpu_no = str(avail_gpu[0])
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
     os.environ['CUDA_VISIBLE_DEVICES'] = gpu_no
     logging.info('Choose the most free GPU: %s, currently not support multi-gpus' % gpu_no)
 

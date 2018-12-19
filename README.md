@@ -69,7 +69,7 @@ pip install git+https://www.github.com/keras-team/keras-contrib.git
 
 4. Classifier & Sequence Labeler：封装类，支持不同的训练任务
 
-5. Application：目前工具箱内封装了基于jieba的名词短语分词器 Chunk_Segmentor
+5. Application：目前工具箱内封装了基于jieba的名词短语分词器 Chunk_Segmentor (如需模型文件，可以邮件联系我)
 
 简单的用法如下：
 
@@ -196,6 +196,8 @@ cutter.cut(s, cut_all=True)
    dataset.add({'text': '我 爱 机器 学习', 'label': 'pos'})
    # sequence labeling
    dataset.add({'text': '我 爱 机器 学习', 'label': 'O O B-Chunk E-Chunk'})
+   # after you add all your data
+   dataset.fit()
    ```
 
 ### 配置文件
@@ -227,7 +229,20 @@ embed: 词向量，pre表示是否使用预训练词向量
 
     <span style="background-color: #FFFAFA">有</span> <span style="background-color: #FFB6B6">能力</span> <span style="background-color: #FFFBFB">的</span> <span style="background-color: #FFF8F8">人</span> <span style="background-color: #FFEFEF">就</span> <span style="background-color: #FFE3E3">有</span> <span style="background-color: #FFEFEF">很多</span> <span style="background-color: #FF9191">机会</span>
 
-2. acc/loss 曲线可视化
+2. 实体预测结果可视化
+
+   ```python
+   from nlp_toolkit import visualization as vs
+   vs.entity_visualization(dataset.texts, y_pred, output_fname='result.html')
+   ```
+
+3. acc/loss 曲线可视化
+
+   ```python
+   # after your have trained one model, you will also get a history object, which contains some loss and metrics info
+   from nlp_toolkit import visualization as vs
+   vs.plot_loss_acc(history, task='sequence_labeling')
+   ```
 
 ### 其他
 
@@ -332,7 +347,7 @@ ps: 模型大小表示为模型的参数量，其中K表示千，M表示百万�
 
 1. 加入更多SOTA的模型和自定义层
 
-2. 下一版本规划：增加抽象类Sentence 
+2. 下一版本规划：增加抽象类Sentence
 
 3. V2.0规划：切换为tf.estimator和tf.keras的API
 

@@ -180,11 +180,9 @@ class IndexTransformer(BaseEstimator, TransformerMixin):
             max_tokens = self.max_tokens
         tokens = X['token']
         token_ids = [self._token_vocab.doc2id(doc) for doc in tokens]
-        # lengths = (len(line) for line in token_ids)
-        # lengths = [self.max_tokens if l > self.max_tokens else l for l in lengths]
         token_ids = pad_sequences(
             token_ids, maxlen=max_tokens, padding='post')
-        # features = {'token': token_ids, 'length': lengths}
+
         features = {'token': token_ids}
 
         if self.use_inner_char:
@@ -306,16 +304,13 @@ class BasicIterator(Sequence):
         idx_begin = self.batch_size * idx
         idx_end = self.batch_size * (idx + 1)
         x_batch = {k: v[idx_begin: idx_end] for k, v in self.x.items()}
+   
         if self.y is not None:
             y_batch = self.y[idx_begin: idx_end]
-        else:
-            y_batch = None
-
-        features, labels = self.t.transform(x_batch, y_batch)
-
-        if labels is not None:
+            features, labels = self.t.transform(X=x_batch, y=y_batch)
             return features, labels
         else:
+            features = self.t.transform(X=x_batch)
             return features
 
     def __len__(self):

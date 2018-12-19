@@ -166,7 +166,7 @@ def update(src):
     try:
         if current_data_md5 != latest_data_md5:
             x = input('发现新的数据和模型？是否决定下载更新？ Yes/No?')
-            if x in ['Yes', 'Y', 'y', 'YES', '1', 1, 'yes']:
+            if x in ['Yes', 'Y', 'y', 'YES', '1', 1, 'yes'] or x == '':
                 flag = update_data(src)
                 if flag:
                     print('模型和字典数据已更新到最新版本')

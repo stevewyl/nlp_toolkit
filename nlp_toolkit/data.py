@@ -43,14 +43,19 @@ class Dataset(object):
     """
 
     def __init__(self, mode, fname='', tran_fname='',
-                 config=None, task_type=None):
+                 config=None, task_type=None, data_format=''):
         self.mode = mode
         self.fname = fname
         self.inner_char = False
         self.use_seg = False
         self.use_radical = False
         self.radical_dict = None
-        self.basic_token = config['data']['basic_token']
+        
+        if data_format != '':
+            self.data_format = data_format
+
+        if config:
+            self.basic_token = config['data']['basic_token']
         self.html_texts = re.compile(r'('+'|'.join(REGEX_STR)+')', re.UNICODE)
 
         if task_type:
@@ -65,20 +70,12 @@ class Dataset(object):
                 logger.error('please check your config filename')
                 sys.exit()
 
-        if self.basic_token == 'char':
-                self.use_seg = config['data']['use_seg']
-                self.use_radical = config['data']['use_radical']
-
-        if self.use_radical:
-            radical_file = Path(os.path.dirname(os.path.realpath(__file__))) / 'data' / 'radical.txt'
-            self.radical_dict = {line.split()[0]: line.split()[1].strip()
-                                 for line in open(radical_file, encoding='utf8')}
-
         if mode == 'train':
             if 'data' in config:
                 self.config = config
                 self.data_config = config['data']
                 self.embed_config = config['embed']
+                self.data_format = self.data_config['format']
                 if self.basic_token == 'word':
                     self.max_tokens = self.data_config['max_words']
                     self.inner_char = self.data_config['inner_char']
@@ -101,6 +98,16 @@ class Dataset(object):
                 logger.error("please pass in the correct config dict")
                 sys.exit()
 
+            if self.basic_token == 'char':
+                self.use_seg = config['data']['use_seg']
+                self.use_radical = config['data']['use_radical']
+
+            if self.use_radical:
+                radical_file = Path(os.path.dirname(
+                    os.path.realpath(__file__))) / 'data' / 'radical.txt'
+                self.radical_dict = {line.split()[0]: line.split()[1].strip()
+                                    for line in open(radical_file, encoding='utf8')}
+
             self.transformer = IndexTransformer(
                 task_type=self.task_type,
                 max_tokens=self.max_tokens,
@@ -111,7 +118,7 @@ class Dataset(object):
                 radical_dict=self.radical_dict,
                 basic_token=self.basic_token)
 
-        elif mode == 'predict':
+        elif mode != 'train':
             if len(tran_fname) > 0:
                 logger.info('transformer loaded')
                 self.transformer = IndexTransformer.load(tran_fname)
@@ -119,17 +126,17 @@ class Dataset(object):
                 self.use_seg = self.transformer.use_seg
                 self.use_radical = self.transformer.use_radical
                 self.inner_char = self.transformer.use_inner_char
+                self.max_tokens = self.transformer.max_tokens
             else:
                 logger.error("please pass in the transformer's filepath")
                 sys.exit()
 
         if fname:
             self.load_data()
+            self.fit()
         else:
             self.texts = []
             self.labels = []
-
-        self.fit()
 
     def clean(self, line):
         line = re.sub(r'\[[\u4e00-\u9fa5a-z]{1,4}\]|\[aloha\]', '', line)
@@ -145,9 +152,9 @@ class Dataset(object):
         if self.task_type == 'classification':
             self.load_tc_data()
         elif self.task_type == 'sequence_labeling':
-            if self.mode == 'train':
+            if self.mode != 'predict':
                 self.load_sl_data()
-            elif self.mode == 'predict':
+            else:
                 self.texts = [line.strip().split() for line in open(self.fname, 'r', encoding='utf8')]
         logger.info('data loaded')
 
@@ -166,7 +173,7 @@ class Dataset(object):
         with open(self.fname, 'r', encoding='utf8') as fin:
             for line in fin:
                 words = self.clean(line.strip()).split()
-                if self.mode == 'train':
+                if self.mode != 'predict':
                     if words:
                         nb_labels = 0
                         label_line = []
@@ -182,7 +189,7 @@ class Dataset(object):
                             text = text[:max_tokens_per_doc]
                         self.texts.append(text)
                         self.labels.append(label_line)
-                elif self.mode == 'predict':
+                else:
                     self.texts.append(words)
 
     def load_sl_data(self):
@@ -200,12 +207,12 @@ class Dataset(object):
             word###tag\tword###tag\t...word###tag
         """
         data = (line.strip() for line in open(self.fname, 'r', encoding='utf8'))
-        if self.data_config['format'] == 'basic':
+        if self.data_format == 'basic':
             self.texts, self.labels = zip(
                 *[zip(*[item.rsplit('###', 1) for item in line.split('\t')]) for line in data])
             self.texts = list(map(list, self.texts))
             self.labels = list(map(list, self.labels))
-        elif self.data_config['format'] == 'conll':
+        elif self.data_format == 'conll':
             self.texts, self.labels = self.process_conll(data)
         else:
             logger.warning('invalid data format for sequence labeling task')
@@ -226,18 +233,15 @@ class Dataset(object):
         return sents, labels
 
     def add(self, line: Dict[str, str]):
+        t = line['text'].strip().split()
         if self.mode == 'train':
-            if self.task_type == 'classification':
-                self.texts.append(line['text'].strip())
-                self.labels.append(line['label'])
-            elif self.task_type == 'sequence_labeling':
-                t = line['text'].strip().split()
-                l = line['label'].strip().split()
+            l = line['label'].strip().split()
+            if self.task_type == 'sequence_labeling':
                 assert len(t) == len(l)
-                self.texts.append(t)
-                self.labels.append(l)
+            self.texts.append(t)
+            self.labels.append(l)
         elif self.mode == 'predict':
-            self.texts.append(line['text'].strip())
+            self.texts.append(t)
 
     # 转折句简单切分
     def adv_split(self, line):
@@ -257,46 +261,47 @@ class Dataset(object):
                     self.texts = {'token': [word2char(x, task_type=self.task_type) for x in self.texts]}
             else:
                 self.texts = {'token': self.texts}
-            self.config['mode'] = self.mode
-            self.transformer.fit(self.texts['token'], self.labels)
-            logger.info('transformer fitting complete')
-            embed = {}
-            if self.embed_config['pre']:
-                token_embed, dim = load_vectors(
-                    self.embed_config[self.basic_token]['path'], self.transformer._token_vocab)
-                embed[self.basic_token] = token_embed
-                logger.info('Loaded Pre_trained Embeddings')
-            else:
-                logger.info('Use Embeddings from Straching ')
-                dim = self.embed_config[self.basic_token]['dim']
-                embed[self.basic_token] = None
-            # update config
-            self.config['nb_classes'] = self.transformer.label_size
-            self.config['nb_tokens'] = self.transformer.token_vocab_size
-            self.config['extra_features'] = []
-            if self.inner_char:
-                self.config['nb_char_tokens'] = self.transformer.char_vocab_size
-            else:
-                self.config['nb_char_tokens'] = 0
-                self.config['use_inner_char'] = False
-            if self.use_seg:
-                self.config['nb_seg_tokens'] = self.transformer.seg_vocab_size
-                self.config['extra_features'].append('seg')
-                self.config['use_seg'] = self.use_seg
-            else:
-                self.config['nb_seg_tokens'] = 0
-                self.config['use_seg'] = False
-            if self.use_radical:
-                self.config['nb_radical_tokens'] = self.transformer.radical_vocab_size
-                self.config['extra_features'].append('radical')
-                self.config['use_radical'] = self.use_radical
-            else:
-                self.config['nb_radical_tokens'] = 0
-                self.config['use_radical'] = False
-            self.config['embedding_dim'] = dim
-            self.config['token_embeddings'] = embed[self.basic_token]
-            self.config['maxlen'] = self.max_tokens
-            self.config['task_type'] = self.task_type
+            if self.mode == 'train':
+                self.config['mode'] = self.mode
+                self.transformer.fit(self.texts['token'], self.labels)
+                logger.info('transformer fitting complete')
+                embed = {}
+                if self.embed_config['pre']:
+                    token_embed, dim = load_vectors(
+                        self.embed_config[self.basic_token]['path'], self.transformer._token_vocab)
+                    embed[self.basic_token] = token_embed
+                    logger.info('Loaded Pre_trained Embeddings')
+                else:
+                    logger.info('Use Embeddings from Straching ')
+                    dim = self.embed_config[self.basic_token]['dim']
+                    embed[self.basic_token] = None
+                # update config
+                self.config['nb_classes'] = self.transformer.label_size
+                self.config['nb_tokens'] = self.transformer.token_vocab_size
+                self.config['extra_features'] = []
+                if self.inner_char:
+                    self.config['nb_char_tokens'] = self.transformer.char_vocab_size
+                else:
+                    self.config['nb_char_tokens'] = 0
+                    self.config['use_inner_char'] = False
+                if self.use_seg:
+                    self.config['nb_seg_tokens'] = self.transformer.seg_vocab_size
+                    self.config['extra_features'].append('seg')
+                    self.config['use_seg'] = self.use_seg
+                else:
+                    self.config['nb_seg_tokens'] = 0
+                    self.config['use_seg'] = False
+                if self.use_radical:
+                    self.config['nb_radical_tokens'] = self.transformer.radical_vocab_size
+                    self.config['extra_features'].append('radical')
+                    self.config['use_radical'] = self.use_radical
+                else:
+                    self.config['nb_radical_tokens'] = 0
+                    self.config['use_radical'] = False
+                self.config['embedding_dim'] = dim
+                self.config['token_embeddings'] = embed[self.basic_token]
+                self.config['maxlen'] = self.max_tokens
+                self.config['task_type'] = self.task_type
         else:
             if self.basic_token == 'char':
                 self.texts = [

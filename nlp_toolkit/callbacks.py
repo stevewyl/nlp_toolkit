@@ -3,6 +3,8 @@ Different kinds of callbacks during model training
 """
 
 import numpy as np
+from collections import defaultdict
+from typing import List
 from pathlib import Path
 from seqeval.metrics import accuracy_score
 from seqeval.metrics import f1_score as f1_seq_score
@@ -31,7 +33,7 @@ class Top_N_Acc(Callback):
             if self.attention:
                 y_pred = y_pred[:, :self.t.label_size]
             y_true = self.t.inverse_transform(y_true)
-            y_pred = self.t.inverse_transform(y_pred, 5)
+            y_pred = self.t.inverse_transform(y_pred, top_k=self.top_n)
             label_true.extend(y_true)
             label_pred.extend(y_pred)
         assert len(label_pred) == len(label_true)
@@ -59,7 +61,6 @@ class F1score(Callback):
         label_true, label_pred = [], []
         for i in range(len(self.seq)):
             x_true, y_true = self.seq[i]
-
             y_true = np.argmax(y_true, -1)
             y_pred = self.model.predict_on_batch(x_true)
             if self.attention:
@@ -126,20 +127,25 @@ class F1score_seq(Callback):
 
 
 class History(Callback):
-    def __init__(self, metric):
+    def __init__(self, metric: List[str]):
         self.metric = metric
 
     def on_train_begin(self, logs={}):
-        self.losses = []
+        self.loss = []
         self.acc = []
-        self.metrics = []
+        self.val_loss = []
+        self.val_acc = []
+        self.metrics = defaultdict(list)
 
     def on_batch_end(self, batch, logs={}):
-        self.losses.append(logs.get('loss'))
+        self.loss.append(logs.get('loss'))
         self.acc.append(logs.get('acc'))
 
     def on_epoch_end(self, epoch, logs={}):
-        self.metrics.append(logs.get(self.metric))
+        for m in self.metric:
+            self.metrics[m].append(logs.get(m))
+        self.val_loss.append(logs.get('val_loss'))
+        self.val_acc.append(logs.get('val_acc'))
 
 
 def get_callbacks(history=None, log_dir=None, valid=None, metric='f1',

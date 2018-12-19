@@ -12,7 +12,8 @@ from nlp_toolkit.utilities import logger
 from nlp_toolkit.sequence import BasicIterator
 from nlp_toolkit.data import Dataset
 from typing import List, Dict
-
+from copy import deepcopy
+from sklearn.metrics import classification_report
 
 # TODO
 # 1. evaluate func
@@ -31,18 +32,18 @@ class Classifier(object):
         self.model_name = model_name
         self.dataset = dataset
         self.transformer = dataset.transformer
-        self.config = self.dataset.config
-        if self.config['mode'] == 'train':
+        if dataset.mode == 'train':
+            self.config = self.dataset.config
             self.m_cfg = self.config['model'][self.model_name]
             self.seq_type = seq_type
             if seq_type == 'bucket':
                 self.config['maxlen'] = None
             self.model = self.get_model()
             self.model_trainer = self.get_trainer()
-        elif self.config['mode'] == 'predict':
+        elif dataset.mode == 'predict' or dataset.mode == 'eval':
             pass
         else:
-            logger.warning('invalid mode name. Current only support "train" and "predict"')
+            logger.warning('invalid mode name. Current only support "train" "eval" "predict"')
 
     def get_model(self):
         if self.model_name == 'bi_lstm_att':
@@ -114,7 +115,7 @@ class Classifier(object):
             train_mode=t_cfg['train_mode'],
             fold_cnt=t_cfg['nb_fold'],
             test_size=t_cfg['test_size'],
-            metric=t_cfg['metric'],
+            metric=['f1'],
             nb_bucket=t_cfg['nb_bucket'],
             patiences=t_cfg['patiences']
         )
@@ -132,9 +133,12 @@ class Classifier(object):
     def predict(self, x: Dict[str, List[List[str]]], batch_size=64,
                 return_attention=False, return_prob=False):
         n_labels = len(self.transformer._label_vocab._id2token)
+        x_c = deepcopy(x)
         start = time.time()
+        x_len = [item[-1] for item in x_c['token']]
+        x_c['token'] = [item[:-1] for item in x_c['token']]
         x_seq = BasicIterator('classification', self.transformer,
-                              x, batch_size=batch_size)
+                              x_c, batch_size=batch_size)
         result = self.model.model.predict_generator(x_seq)
         if return_prob:
             y_pred = result[:, :n_labels]
@@ -142,15 +146,27 @@ class Classifier(object):
             y_pred = self.transformer.inverse_transform(result[:, :n_labels])
         used_time = time.time() - start
         logger.info('predict {} samples used {:4.1f}s'.format(
-            len(x), used_time))
+            len(x['token']), used_time))
         if result.shape[1] > n_labels:
             attention = result[:, n_labels:]
+            attention = [attention[idx][:l] for idx, l in enumerate(x_len)]
             return y_pred, attention
         else:
             return y_pred
 
-    def evaluate(self, x: Dict[str, List[List[str]]], y: List[List[str]]):
-        pass
+    def evaluate(self, x: Dict[str, List[List[str]]], y: List[str],
+                 batch_size=64):
+        n_labels = len(self.transformer._label_vocab._id2token)
+        y = [item[0] for item in y]
+        x_c = deepcopy(x)
+        x_len = [item[-1] for item in x_c['token']]
+        x_c['token'] = [item[:-1] for item in x_c['token']]
+        x_seq = BasicIterator('classification', self.transformer,
+                              x_c, batch_size=batch_size)
+        result = self.model.model.predict_generator(x_seq)
+        result = result[:, :n_labels]
+        y_pred = self.transformer.inverse_transform(result, lengths=x_len)
+        print(classification_report(y, y_pred))
 
     def load(self, weight_fname, para_fname):
         if self.model_name == 'bi_lstm_att':

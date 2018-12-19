@@ -65,7 +65,8 @@ class Trainer(object):
                  test_size=0.2,
                  shuffle=True,
                  patiences=3):
-        self.model = model
+        self.single_model = deepcopy(model)
+        self.fold_model = deepcopy(model)
         self.model_name = model_name
         self.task_type = task_type
         self.metric = metric
@@ -107,19 +108,21 @@ class Trainer(object):
             logger.warning('invalid data iterator type, only supports "basic" or "bucket"')
         return train_batches, valid_batches
 
-    def train(self, x, y, transformer,
+    def train(self, x_ori, y, transformer,
               seq_type='bucket',
               return_attention=False):
         self.transformer = transformer
-        x_len = [item[-1] for item in x['token']]
-        x['token'] = [item[:-1] for item in x['token']]
-        self.feature_keys = list(x.keys())
+        self.feature_keys = list(x_ori.keys())
 
         if self.train_mode == 'single':
+            x = deepcopy(x_ori)
+            x_len = [item[-1] for item in x['token']]
+            x['token'] = [item[:-1] for item in x['token']]
+
             # model initialization
-            self.model.forward()
+            self.single_model.forward()
             logger.info('%s model structure...' % self.model_name)
-            self.model.model.summary()
+            self.single_model.model.summary()
 
             # split dataset
             indices = np.random.permutation(len(x['token']))
@@ -142,47 +145,54 @@ class Trainer(object):
             history = History(self.metric)
             self.callbacks = get_callbacks(
                 history=history,
-                metric=self.metric,
+                metric=self.metric[0],
                 log_dir=self.checkpoint_path,
                 valid=valid_batches,
                 transformer=transformer,
                 attention=return_attention)
 
             # model compile
-            self.model.model.compile(
-                loss=self.model.get_loss(),
+            self.single_model.model.compile(
+                loss=self.single_model.get_loss(),
                 optimizer=self.optimizer,
-                metrics=self.model.get_metrics())
+                metrics=self.single_model.get_metrics())
 
             # save transformer and model parameters
             if not self.checkpoint_path.exists():
                 self.checkpoint_path.mkdir()
             transformer.save(self.checkpoint_path / 'transformer.h5')
-            invalid_params = self.model.invalid_params
+            invalid_params = self.single_model.invalid_params
             param_file = self.checkpoint_path / 'model_parameters.json'
-            self.model.save_params(param_file, invalid_params)
+            self.single_model.save_params(param_file, invalid_params)
             logger.info('saving model parameters and transformer to {}'.format(
                 self.checkpoint_path))
 
             # actual training start
-            self.model.model.fit_generator(
+            self.single_model.model.fit_generator(
                 generator=train_batches,
                 epochs=self.max_epoch,
                 callbacks=self.callbacks,
                 shuffle=self.shuffle,
                 validation_data=valid_batches)
-            print('best {}: {:04.2f}'.format(self.metric, max(history.metrics) * 100))
-            return self.model.model, history
+            print('best {}: {:04.2f}'.format(self.metric[0],
+                                             max(history.metrics[self.metric[0]]) * 100))
+            return self.single_model.model, history
 
         elif self.train_mode == 'fold':
-            fold_size = len(x) // self.fold_cnt
+            x = deepcopy(x_ori)
+            x_len = [item[-1] for item in x['token']]
+            x['token'] = [item[:-1] for item in x['token']]
+            x_token_first = x['token'][0]
+
+            fold_size = len(x['token']) // self.fold_cnt
             scores = []
             logger.info('%d-fold starts!' % self.fold_cnt)
 
             for fold_id in range(self.fold_cnt):
                 print('\n------------------------ fold ' + str(fold_id) + '------------------------')
 
-                model_init = deepcopy(self.model)
+                assert x_token_first == x['token'][0]
+                model_init = self.fold_model
                 model_init.forward()
 
                 fold_start = fold_size * fold_id
@@ -199,6 +209,7 @@ class Trainer(object):
                 x_valid = {k: x[k][fold_start:fold_end] for k in self.feature_keys}
                 x_len_valid = x_len[fold_start:fold_end]
                 y_valid = y[fold_start:fold_end]
+
                 train_batches, valid_batches = self.data_generator(
                     seq_type,
                     x_train, x_valid, y_train, y_valid,
@@ -206,7 +217,7 @@ class Trainer(object):
 
                 history = History(self.metric)
                 self.callbacks = get_callbacks(
-                    history=history, metric=self.metric,
+                    history=history, metric=self.metric[0],
                     valid=valid_batches, transformer=transformer,
                     attention=return_attention)
 
@@ -221,7 +232,7 @@ class Trainer(object):
                     callbacks=self.callbacks,
                     shuffle=self.shuffle,
                     validation_data=valid_batches)
-                scores.append(max(history.metrics))
+                scores.append(max(history.metrics[self.metric[0]]))
 
             logger.info('training finished! The mean {} scores: {:4.2f}(±{:4.2f})'.format(
-                self.metric, np.mean(scores) * 100, np.std(scores) * 100))
+                self.metric[0], np.mean(scores) * 100, np.std(scores) * 100))

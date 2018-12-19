@@ -12,6 +12,7 @@ from nlp_toolkit.utilities import logger
 from nlp_toolkit.sequence import BasicIterator
 from nlp_toolkit.data import Dataset
 from typing import List, Dict
+from seqeval.metrics import classification_report as sequence_report
 
 
 class Labeler(object):
@@ -27,18 +28,18 @@ class Labeler(object):
         self.model_name = model_name
         self.dataset = dataset
         self.transformer = dataset.transformer
-        self.config = self.dataset.config
-        if self.config['mode'] == 'train':
+        if dataset.mode == 'train':
+            self.config = self.dataset.config
             self.m_cfg = self.config['model'][self.model_name]
             self.seq_type = seq_type
             if seq_type == 'bucket':
                 self.config['maxlen'] = None
             self.model = self.get_model()
             self.model_trainer = self.get_trainer()
-        elif self.config['mode'] == 'predict':
+        elif dataset.mode == 'predict' or dataset.mode == 'eval':
             pass
         else:
-            logger.warning('invalid mode name. Current only support "train" and "predict"')
+            logger.warning('invalid mode name. Current only support "train" "eval" "predict"')
 
     def get_model(self):
         if self.model_name == 'word_rnn':
@@ -111,7 +112,7 @@ class Labeler(object):
             train_mode=t_cfg['train_mode'],
             fold_cnt=t_cfg['nb_fold'],
             test_size=t_cfg['test_size'],
-            metric=t_cfg['metric'],
+            metric=['f1_seq', 'seq_acc'],
             nb_bucket=t_cfg['nb_bucket'],
             patiences=t_cfg['patiences']
         )
@@ -122,38 +123,37 @@ class Labeler(object):
             self.dataset.texts, self.dataset.labels,
             self.transformer, self.seq_type)
 
-    def feature_concat(self, x, features):
-        x_ori = deepcopy(x)
-        x = np.expand_dims(x['token'], axis=-1)
-        for name in features:
-            feature = np.expand_dims(x_ori[name], axis=-1)
-            x = np.concatenate((x, feature), axis=-1)
-        return x
-
     def predict(self, x: Dict[str, List[List[str]]], batch_size=64,
                 return_prob=False):
         start = time.time()
+        x_c = deepcopy(x)
+        x_len = [item[-1] for item in x_c['token']]
+        x_c['token'] = [item[:-1] for item in x_c['token']]
         x_seq = BasicIterator('sequence_labeling', self.transformer,
-                              x, batch_size=batch_size)
+                              x_c, batch_size=batch_size)
         result = self.model.model.predict_generator(x_seq)
         if return_prob:
-            y_pred = result
+            y_pred = [result[idx][:l] for idx, l in enumerate(x_len)]
         else:
-            y_pred = self.transformer.inverse_transform(result, lengths=lengths)
+            y_pred = self.transformer.inverse_transform(result, lengths=x_len)
         used_time = time.time() - start
         logger.info('predict {} samples used {:4.1f}s'.format(
-            len(x), used_time))
+            len(x['token']), used_time))
         return y_pred
 
     def show_results(self, x, y_pred):
-        x_len = x['length']
-        y_pred_true = [y_pred[i][:x_len[i]] for i in range(len(x_len))]
-        x_true = [x['token'][i][:x_len[i]] for i in range(len(x_len))]
-        x_true = [[self.transformer._token_vocab.id_to_token(idx) for idx in seq] for seq in x_true]
-        return [[(x1, y1) for x1, y1 in zip(x, y)] for x, y in zip(x_true, y_pred_true)]
+        return [[(x1, y1) for x1, y1 in zip(x, y)] for x, y in zip(x, y_pred)]
 
-    def evaluate(self, x: Dict[str, List[List[str]]], y: List[List[str]]):
-        pass
+    def evaluate(self, x: Dict[str, List[List[str]]], y: List[List[str]],
+                 batch_size=64):
+        x_c = deepcopy(x)
+        x_len = [item[-1] for item in x_c['token']]
+        x_c['token'] = [item[:-1] for item in x_c['token']]
+        x_seq = BasicIterator('sequence_labeling', self.transformer,
+                            x_c, batch_size=batch_size)
+        result = self.model.model.predict_generator(x_seq)
+        y_pred = self.transformer.inverse_transform(result, lengths=x_len)
+        print(sequence_report(y, y_pred))
 
     def load(self, weight_fname, para_fname):
         if self.model_name == 'word_rnn':
