@@ -321,6 +321,8 @@ def _roundto(val, batch_size):
     return int(math.ceil(val / batch_size)) * batch_size
 
 
+# TODO
+# 按长度聚簇，长文本采用小的batch_size，短文本采用大的batch_size
 class BucketIterator(Sequence):
     """
     A Keras Sequence (dataset reader) of input sequences read in bucketed bins.

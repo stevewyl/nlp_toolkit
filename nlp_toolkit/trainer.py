@@ -19,6 +19,9 @@ from copy import deepcopy
 np.random.seed(1050)
 
 
+# TODO 自适应的学习率
+# 1. 基于valid数据的自适应学习率下降
+# 2. 三角学习率
 class Trainer(object):
     """
     Trainer class for all model training

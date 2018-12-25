@@ -23,50 +23,16 @@ IP = socket.gethostbyname(socket.gethostname())
 
 def check_version():
     if MD5_FILE_PATH.exists():
-        current_time = datetime.now()
-        if UPDATE_TAG_PATH.exists():
-            last_update_time = pickle.load(open(UPDATE_TAG_PATH, 'rb'))
-            diff = (current_time - last_update_time).days
-            if diff > 10:
-                src = get_data_md5()
-                if src:
-                    flag = update(src)
-                    if flag:
-                        pickle.dump(current_time, open(UPDATE_TAG_PATH, 'wb'))
-                    else:
-                        print('定期检查模型和字典数据更新失败！')
-                else:
-                    print('拉取md5文件失败！')
+        src = get_data_md5()
+        if src:
+            flag = update(src)
+            if not flag:
+                print('模型和数据更新失败！')
             else:
-                pass
+                for fname in glob.glob('model_data.md5*'):
+                    os.remove(fname)
         else:
-            current_time = datetime.now()
-            pickle.dump(current_time, open(UPDATE_TAG_PATH, 'wb'))
-            print('请再加载一次')
-        try:
-            init_update_time = str(os.path.getctime(INIT_PATH))
-            if UPDATE_INIT_PATH.exists():
-                last_update_time = open(UPDATE_INIT_PATH).read()
-                if init_update_time != last_update_time:
-                    src = get_data_md5()
-                    if src:
-                        flag = update(src)
-                        if flag:
-                            with open(UPDATE_INIT_PATH, 'w') as fout:
-                                fout.write(init_update_time)
-                        else:
-                            print('因代码更新，强制更新模型和字典数据失败！')
-                    else:
-                        print('拉取md5文件失败！')
-                else:
-                    pass
-            else:
-                with open(UPDATE_INIT_PATH, 'w') as fout:
-                    fout.write(init_update_time)
-                print('请再加载一次')
-        except Exception:
-            print('代码文件缺失')
-            sys.exit()
+            print('拉取md5文件失败！')
     else:
         print("这是第一次启动Chunk分词器。 请耐心等待片刻至数据和模型下载完成。")
         flag = download()
@@ -102,7 +68,7 @@ def download():
 
     if not IP.startswith('127'):
         print('尝试从ftp://192.168.8.23:21获取数据')
-        ret2 = os.system('wget --timeout=2 --tries=1 --ftp-user=%s --ftp-password=%s %s/model_data.md5' %
+        ret2 = os.system('wget -q --timeout=2 --tries=1 --ftp-user=%s --ftp-password=%s %s/model_data.md5' %
                         (USER_NAME, PASSWORD, FTP_PATH_1))
         if ret2 == 0:
             ret1 = os.system('wget --ftp-user=%s --ftp-password=%s %s/model_data.zip' %
@@ -113,7 +79,7 @@ def download():
             ret2 = os.system('hadoop fs -get %s' % MD5_HDFS_PATH)
     else:
         print('尝试从ftp://211.148.28.11:21获取数据')
-        ret2 = os.system('wget --timeout=2 --tries=1 --ftp-user=%s --ftp-password=%s %s/model_data.md5' %
+        ret2 = os.system('wget -q --timeout=2 --tries=1 --ftp-user=%s --ftp-password=%s %s/model_data.md5' %
                         (USER_NAME, PASSWORD, FTP_PATH_2))
         if ret2 == 0:
             ret1 = os.system('wget --ftp-user=%s --ftp-password=%s %s/model_data.zip' %
@@ -138,7 +104,7 @@ def get_data_md5():
     ret = -1
 
     if not IP.startswith('127'):
-        ret = os.system('wget --timeout=2 --tries=1 --ftp-user=%s --ftp-password=%s %s/model_data.md5' %
+        ret = os.system('wget -q --timeout=2 --tries=1 --ftp-user=%s --ftp-password=%s %s/model_data.md5' %
                         (USER_NAME, PASSWORD, FTP_PATH_1))
         if ret == 0:
             src = 'ftp1'
@@ -147,7 +113,7 @@ def get_data_md5():
             if ret == 0:
                 src = 'hdfs'
     else:
-        ret = os.system('wget  --timeout=2 --tries=1 --ftp-user=%s --ftp-password=%s %s/model_data.md5' % 
+        ret = os.system('wget -q --timeout=2 --tries=1 --ftp-user=%s --ftp-password=%s %s/model_data.md5' % 
                         (USER_NAME, PASSWORD, FTP_PATH_2))
         if ret == 0:
             src = 'ftp2'

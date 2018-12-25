@@ -121,7 +121,7 @@ def get_radical(d, char_list):
 class Tagger(object):
     def __init__(self, model, preprocessor, basic_token='word', pos=True,
                  batch_size=512, radical_file='', tree=None,
-                 qualifier_dict=None):
+                 qualifier_dict=None, verbose=0):
         self.wrong = []
         self.model = model
         self.p = preprocessor
@@ -129,6 +129,7 @@ class Tagger(object):
         self.pos = pos
         self.tree = tree
         self.qualifier_dict = qualifier_dict
+        self.verbose = verbose
         if self.basic_token == 'char':
             if self.p.radical_vocab_size > 2:
                 self.use_radical = True
@@ -298,6 +299,8 @@ class Tagger(object):
             return None
 
     def output(self, res):
+        if self.verbose:
+            print(res)
         words = res['words']
         poss = res['pos']
         dict_idx = tag_by_dict(words, self.tree)
@@ -355,6 +358,8 @@ class Tagger(object):
                     new_pos.append('np')
         else:
             chunks = {item[1]: ''.join(words[item[0]: item[1]+1]) for item in new_idx}
+            if self.verbose:
+                print(chunks)
             chunk_idx = [i for item in new_idx for i in range(item[0], item[1] + 1)]
             for i, item in enumerate(words):
                 if i not in chunk_idx:
@@ -389,6 +394,8 @@ class Tagger(object):
         split_text = [split_text[sent_idx[i]:sent_idx[i+1]] for i in range(len(sent_idx)-1)]
         split_pos = [split_pos[sent_idx[i]:sent_idx[i+1]] for i in range(len(sent_idx)-1)]
         pred = [np.array(pred[sent_idx[i]:sent_idx[i+1]]) for i in range(len(sent_idx)-1)]
+        if self.verbose:
+            print(pred)
         if self.basic_token == 'char':
             segs = [segs[sent_idx[i]:sent_idx[i+1]] for i in range(len(sent_idx)-1)]
             word = [word[sent_idx[i]:sent_idx[i+1]] for i in range(len(sent_idx)-1)]
@@ -406,6 +413,8 @@ class Tagger(object):
                 split_segs = []
                 split_words = []
             tags = self._get_tags(Y)
+            if self.verbose:
+                print(tags)
             # prob = self._get_prob(Y)
             res = self._build_response(words, tags, poss, split_segs, split_words)
             final_res.append(self.output(res))

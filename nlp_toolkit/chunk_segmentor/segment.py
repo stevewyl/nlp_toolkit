@@ -127,7 +127,8 @@ class Chunk_Segmentor(object):
             global Labeler
             global Tree
             if self.verbose:
-                print('Model and Trie Tree are loading. It will cost 10-20s.')
+                if not load_dict:
+                    print('Model and Trie Tree are loading. It will cost 10-20s.')
             if self.model_name != last_model_name:
                 self.labeler = Chunk_Labeler.load(
                     self.model_name, self.weight_file, self.param_file, self.preprocess_file)
@@ -151,7 +152,8 @@ class Chunk_Segmentor(object):
             radical_file = os.path.join(self.path, 'data/dict/radical.txt')
             self.tagger = Tagger(self.labeler.model, self.labeler.p,
                                  basic_token=self.basic_token, radical_file=radical_file,
-                                 tree=self.tree, qualifier_dict=self.qualifier_word)
+                                 tree=self.tree, qualifier_dict=self.qualifier_word,
+                                 verbose=self.verbose)
 
     @property
     def get_segmentor_info(self):
