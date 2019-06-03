@@ -187,15 +187,30 @@ REGEX_STR = [
     # URLs
     # r'(?:https?://|www\.)(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+',
     # r'\b[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-] +\.[a-zA-Z0-9-.] +\b'  # E-MAIL
+    r'&#[\s\w\d]+;'
 ]
-START_PATTERN = r'(\d+、|\d+\.(?!\d+)|\d+\)|(?<![a-z0-9])[a-z]{1}(?=[、\.\)])|\(\d+\)|[一二三四五六七八九十]+[、\)\.)])'
+START_PATTERN = [
+    r'\* ',
+    r'\d{1,2}\.\d{1,2}\.\d{1,2}',  # 1.2.1
+    r'\d+\t',
+    r'([1-9][0-9]){1,2}[。；:：，,、\.\t/]{1}\s?(?![年月日\d+])',
+    r'([1-9][0-9]){1,2}[)）]{1}、?',
+    r' \| ',
+    r'\n[1-9][0-9]',
+    r'\n{2,}',
+    r'(?<![A-Za-z0-9/])[A-Za-z]{1}\s?[、\.\)、\t]{1}',
+    r'\(1?[1-9]\)',
+    r'第?[一二三四五六七八九十]+[、\)\.) \t，]{1}',
+    r'\([一二三四五六七八九十]+\)\.?'
+]
+START_PATTERN = re.compile(r'('+'|'.join(START_PATTERN)+')+', re.UNICODE)
 END_PATTERN = r'(。|！|？|!|\?|；|;)'
 HTML = re.compile(r'('+'|'.join(REGEX_STR)+')', re.UNICODE)
 
 
 # 异常字符过滤
 def preprocess(string):
-    invalid_unicode = u'[\u25A0-\u25FF\u0080-\u00A0\uE000-\uFBFF\u2000-\u2027\u2030-\u206F]+'
+    invalid_unicode = u'[\u25A0-\u25FF\u0080-\u00A0\uE000-\uFBFF\u2000-\u201B\u201E-\u2027\u2030-\u206F]+'
     lang_char = u'[\u3040-\u309f\u30A0-\u30FF\u1100-\u11FF\u0E00-\u0E7F\u0600-\u06ff\u0750-\u077f\u0400-\u04ff]+'
     invalid_char = u'[\xa0\x7f\x9f]+'
     string = re.sub(EMOJI_UNICODE, '', string)

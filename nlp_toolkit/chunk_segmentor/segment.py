@@ -175,6 +175,7 @@ class Chunk_Segmentor(object):
         poss = list(flatten_gen(complete_poss))
         if self.cut_all:
             words, poss = zip(*[(x1, y1) for x, y in zip(words, poss) for x1, y1 in self.cut_qualifier(x, y)])
+        words = [' ' if word == 's_' else word for word in words]
         if self.pos:
             d = (words,   # C_CUT_WORD
                  poss,    # C_CUT_POS
@@ -186,7 +187,7 @@ class Chunk_Segmentor(object):
         return d
 
     def cut_qualifier(self, x, y):
-        if y == 'np' and '_' in x:
+        if y == 'np' and '_' in x and x not in ['s_', 'ss_', 'lan_']:
             for sub_word in x.split('_'):
                 yield sub_word, y
         else:

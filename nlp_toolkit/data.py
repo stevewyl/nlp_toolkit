@@ -75,7 +75,8 @@ class Dataset(object):
                 self.config = config
                 self.data_config = config['data']
                 self.embed_config = config['embed']
-                self.data_format = self.data_config['format']
+                if self.task_type == 'sequence':
+                    self.data_format = self.data_config['format']
                 if self.basic_token == 'word':
                     self.max_tokens = self.data_config['max_words']
                     self.inner_char = self.data_config['inner_char']

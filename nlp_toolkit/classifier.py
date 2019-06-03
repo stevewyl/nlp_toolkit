@@ -147,7 +147,7 @@ class Classifier(object):
         used_time = time.time() - start
         logger.info('predict {} samples used {:4.1f}s'.format(
             len(x['token']), used_time))
-        if result.shape[1] > n_labels:
+        if result.shape[1] > n_labels and self.model_name == 'bi_lstm_att':
             attention = result[:, n_labels:]
             attention = [attention[idx][:l] for idx, l in enumerate(x_len)]
             return y_pred, attention
@@ -171,7 +171,7 @@ class Classifier(object):
     def load(self, weight_fname, para_fname):
         if self.model_name == 'bi_lstm_att':
             self.model = bi_lstm_attention.load(weight_fname, para_fname)
-        elif self.model_name == 'multi_head_self_att':
+        elif self.model_name == 'transformer':
             self.model = Transformer.load(weight_fname, para_fname)
         elif self.model_name == 'text_cnn':
             self.model = textCNN.load(weight_fname, para_fname)

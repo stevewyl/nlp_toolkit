@@ -61,7 +61,7 @@ pip install git+https://www.github.com/keras-team/keras-contrib.git
 
 3. Trainer：定义模型的训练流程，支持bucket序列、自定义callbacks和N折交叉验证
 
-    * bucket序列：通过将相似长度的文本放入同一batch来减小padding的多余计算来实现模型训练的加速，在文本分类任务中，能够对RNN网络提速2倍以上（暂时不支持含有Flatten层的网络）
+    * bucket序列：通过将相似长度的文本放入同一batch来减小padding的多余计算来实现模型训练的加速，在文本分类任务中，能够对RNN网络提速2倍以上（**暂时不支持含有Flatten层的网络**）
   
     * callbacks：通过自定义回调器来控制训练流程，目前预设的回调器有提前终止训练，学习率自动变化，更丰富的评估函数等
 
@@ -98,6 +98,7 @@ y_pred = text_classifier.predict(dataset.texts)
 # chunk分词
 # 第一次import的时候，会自动下载模型和字典数据
 # 支持单句和多句文本的输入格式，建议以列表的形式传入分词器
+# 源代码中已略去相关数据的下载路径，有需要的请邮件联系
 from nlp_toolkit.chunk_segmentor import Chunk_Segmentor
 cutter = Chunk_Segmentor()
 s = '这是一个能够输出名词短语的分词器，欢迎试用！'

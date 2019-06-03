@@ -12,12 +12,12 @@ DATA_PATH = Path(STATIC_ROOT) / 'data'
 MD5_FILE_PATH = DATA_PATH / 'model_data.md5'
 UPDATE_TAG_PATH = DATA_PATH / 'last_update.pkl'
 UPDATE_INIT_PATH = DATA_PATH / 'init_update.txt'
-MD5_HDFS_PATH = '/user/kdd_wangyilei/chunk_segmentor/model_data.md5'
-MODEL_HDFS_PATH = '/user/kdd_wangyilei/chunk_segmentor/model_data.zip'
-USER_NAME = 'yilei.wang'
-PASSWORD = 'ifchange0829FWGR'
-FTP_PATH_1 = 'ftp://192.168.8.23:21/chunk_segmentor'
-FTP_PATH_2 = 'ftp://211.148.28.11:21/chunk_segmentor'
+MD5_HDFS_PATH = '/user/xxxx/chunk_segmentor/model_data.md5'
+MODEL_HDFS_PATH = '/user/xxxx/chunk_segmentor/model_data.zip'
+USER_NAME = 'xxxx'
+PASSWORD = 'xxxxx'
+FTP_PATH_1 = 'ftp://xxx.xxx.xx.xx:xx/chunk_segmentor'
+FTP_PATH_2 = 'ftp://xxx.xxx.xx.xx:xx/chunk_segmentor'
 IP = socket.gethostbyname(socket.gethostname())
 
 
@@ -43,7 +43,7 @@ def check_version():
             with open(UPDATE_INIT_PATH, 'w') as fout:
                 fout.write(init_update_time)
         else:
-            print('请寻找一台有hadoop或者能访问ftp://192.168.8.23:21或者ftp://211.148.28.11:21的机器')
+            print('请寻找一台有hadoop或者能访问ftp://xxx.xxx.xx.xx:xx或者ftp://xxx.xxx.xx.xx:xx的机器')
 
 
 def write_config(config_path, new_root_path):
@@ -67,7 +67,7 @@ def download():
         os.remove(fname)
 
     if not IP.startswith('127'):
-        print('尝试从ftp://192.168.8.23:21获取数据')
+        print('尝试从ftp://xxx.xxx.xx.xx:xx获取数据')
         ret2 = os.system('wget -q --timeout=2 --tries=1 --ftp-user=%s --ftp-password=%s %s/model_data.md5' %
                         (USER_NAME, PASSWORD, FTP_PATH_1))
         if ret2 == 0:
@@ -78,7 +78,7 @@ def download():
             ret1 = os.system('hadoop fs -get %s' % MODEL_HDFS_PATH)
             ret2 = os.system('hadoop fs -get %s' % MD5_HDFS_PATH)
     else:
-        print('尝试从ftp://211.148.28.11:21获取数据')
+        print('尝试从ftp://xxx.xxx.xx.xx:xx获取数据')
         ret2 = os.system('wget -q --timeout=2 --tries=1 --ftp-user=%s --ftp-password=%s %s/model_data.md5' %
                         (USER_NAME, PASSWORD, FTP_PATH_2))
         if ret2 == 0:
@@ -118,7 +118,7 @@ def get_data_md5():
         if ret == 0:
             src = 'ftp2'
     if ret != 0:
-        print('请寻找一台有hadoop或者能访问ftp://192.168.8.23:21或者ftp://211.148.28.11:21的机器')
+        print('请寻找一台有hadoop或者能访问ftp://xxx.xxx.xx.xx:xx或者ftp://xxx.xxx.xx.xx:xx的机器')
         return None
     else:
         return src
@@ -154,12 +154,12 @@ def update_data(src):
             os.remove(fname)
         if src == 'hdfs':
             print('尝试从hdfs上拉取数据，大约20-30s')
-            os.system('hadoop fs -get /user/kdd_wangyilei/chunk_segmentor/model_data.zip')
+            os.system('hadoop fs -get /user/xxxxx/chunk_segmentor/model_data.zip')
         elif src == 'ftp1':
-            print('尝试从ftp://192.168.8.23:21获取数据')
+            print('尝试从ftp://xxx.xxx.xx.xx:xx获取数据')
             os.system('wget --ftp-user=%s --ftp-password=%s %s/model_data.zip' % (USER_NAME, PASSWORD, FTP_PATH_1))
         elif src == 'ftp2':
-            print('尝试从ftp://211.148.28.11:21获取数据')
+            print('尝试从ftp://xxx.xxx.xx.xx:xx获取数据')
             os.system('wget --ftp-user=%s --ftp-password=%s %s/model_data.zip' % (USER_NAME, PASSWORD, FTP_PATH_2))
 
         os.system('unzip -q model_data.zip')
